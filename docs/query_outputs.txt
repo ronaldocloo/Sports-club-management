@@ -1,0 +1,99 @@
+athlete_id	athlete_name	type_name	start_date	end_date	days_remaining
+1	Kwabena Osei	Annual	2025-01-10	2026-01-10	-213
+4	Efua Mensah	Annual	2025-06-05	2026-06-05	-67
+2	Akosua Frimpong	Monthly	2026-06-01	2026-07-01	-41
+24	Kwadwo Nkrumah	Quarterly	2026-05-01	2026-08-01	-10
+12	Esi Twumasi	Quarterly	2026-05-01	2026-08-01	-10
+5	Kojo Boateng	Monthly	2026-07-01	2026-08-01	-10
+18	Adwoa Kusi	Monthly	2026-07-05	2026-08-05	-6
+22	Araba Quaye	Monthly	2026-07-10	2026-08-10	-1
+6	Adjoa Asante	Student	2026-07-12	2026-08-12	1
+3	Yaw Adjei	Quarterly	2026-05-15	2026-08-15	4
+8	Abena Darko	Monthly	2026-07-15	2026-08-15	4
+14	Afia Gyasi	Monthly	2026-07-20	2026-08-20	9
+20	Yaa Opoku	Quarterly	2026-05-20	2026-08-20	9
+9	Kwesi Appiah	Annual	2025-09-01	2026-09-01	21
+25	Baaba Amoah	Annual	2025-10-01	2026-10-01	51
+17	Nana Yeboah	Annual	2025-11-01	2026-11-01	82
+21	Kobby Acheampong	Annual	2025-12-01	2026-12-01	112
+13	Kwaku Amponsah	Annual	2026-02-05	2027-02-05	178
+type_name	completed_payments	total_revenue	avg_payment
+Annual	9	4500.00	500.00
+Quarterly	7	980.00	140.00
+Monthly	4	200.00	50.00
+Student	2	60.00	30.00
+athlete_id	athlete_name	membership_count
+4	Efua Mensah	2
+13	Kwaku Amponsah	2
+6	Adjoa Asante	2
+athlete_id	athlete_name
+7	Kwame Owusu
+11	Kofi Sarpong
+15	Fiifi Danso
+10	Ama Nyarko
+16	Akua Baffour
+19	Kwabena Ansah
+23	Sena Tetteh
+team_id	team_name	sport_name	coach_name	active_roster_size
+1	Thunder FC	Football	Kwame Mensah	4
+2	Lightning FC	Football	Kojo Appiah	4
+3	Hoops Elite	Basketball	Ama Boateng	3
+5	Aqua Sharks	Swimming	Kofi Owusu	3
+6	Sprint Squad	Athletics	Efua Asante	3
+4	Rim Rockers	Basketball	Adjoa Sarpong	2
+7	Spike Force	Volleyball	Yaw Darko	2
+8	Ace Netters	Tennis	Abena Nyarko	2
+9	Junior Ballers	Basketball	Adjoa Sarpong	2
+10	Rising Stars FC	Football	Kwame Mensah	2
+facility_id	facility_name	facility_type	status	confirmed_bookings
+3	Field 1	Field	Available	7
+1	Main Court A	Court	Available	5
+6	Fitness Gym	Gym	Available	3
+5	Olympic Pool	Pool	Available	3
+2	Main Court B	Court	Available	3
+7	Athletics Track	Track	Available	3
+4	Field 2	Field	Maintenance	0
+8	Community Hall	Hall	Closed	0
+team_id	team_name	competitions_entered
+2	Lightning FC	3
+9	Junior Ballers	2
+4	Rim Rockers	2
+3	Hoops Elite	2
+1	Thunder FC	2
+10	Rising Stars FC	2
+payment_id	athlete_name	phone	type_name	amount	status	payment_date
+30	Akua Baffour	0244000016	Quarterly	140.00	Failed	2026-04-12 09:00:00
+26	Sena Tetteh	0244000023	Student	30.00	Failed	2026-06-25 12:20:00
+12	Ama Nyarko	0244000010	Student	30.00	Failed	2026-07-01 13:00:00
+31	Ama Nyarko	0244000010	Student	30.00	Pending	2026-07-03 09:00:00
+25	Araba Quaye	0244000022	Monthly	50.00	Pending	2026-07-10 09:15:00
+8	Adjoa Asante	0244000006	Student	30.00	Pending	2026-07-12 10:05:00
+10	Abena Darko	0244000008	Monthly	50.00	Pending	2026-07-15 09:10:00
+17	Afia Gyasi	0244000014	Monthly	50.00	Pending	2026-07-20 14:15:00
+athlete_id	athlete_name	teams_joined	teams
+1	Kwabena Osei	2	Rising Stars FC, Thunder FC
+6	Adjoa Asante	2	Hoops Elite, Junior Ballers
+9	Kwesi Appiah	3	Hoops Elite, Rising Stars FC, Thunder FC
+24	Kwadwo Nkrumah	2	Junior Ballers, Lightning FC
+booking_id	facility_name	booking_date	time_slot	team_name	sport_name	coach_name	bookings_same_day_same_facility
+8	Olympic Pool	2026-08-12	06:00-08:00	Aqua Sharks	Swimming	Kofi Owusu	1
+1	Field 1	2026-08-12	06:00-08:00	Thunder FC	Football	Kwame Mensah	2
+2	Field 1	2026-08-12	08:00-10:00	Lightning FC	Football	Kojo Appiah	2
+4	Main Court A	2026-08-12	10:00-12:00	Hoops Elite	Basketball	Ama Boateng	2
+5	Main Court A	2026-08-12	12:00-14:00	Rim Rockers	Basketball	Adjoa Sarpong	2
+10	Athletics Track	2026-08-12	14:00-16:00	Sprint Squad	Athletics	Efua Asante	1
+6	Main Court B	2026-08-13	08:00-10:00	Junior Ballers	Basketball	Adjoa Sarpong	2
+7	Main Court B	2026-08-13	10:00-12:00	Hoops Elite	Basketball	Ama Boateng	2
+13	Main Court A	2026-08-13	18:00-20:00	Ace Netters	Tennis	Abena Nyarko	1
+3	Field 1	2026-08-14	06:00-08:00	Thunder FC	Football	Kwame Mensah	1
+9	Olympic Pool	2026-08-14	06:00-08:00	Aqua Sharks	Swimming	Kofi Owusu	1
+14	Fitness Gym	2026-08-14	08:00-10:00	Thunder FC	Football	Kwame Mensah	2
+15	Fitness Gym	2026-08-14	10:00-12:00	Hoops Elite	Basketball	Ama Boateng	2
+16	Field 1	2026-08-15	06:00-08:00	Lightning FC	Football	Kojo Appiah	2
+17	Field 1	2026-08-15	08:00-10:00	Rising Stars FC	Football	Kwame Mensah	2
+11	Athletics Track	2026-08-15	14:00-16:00	Sprint Squad	Athletics	Efua Asante	1
+18	Main Court A	2026-08-16	10:00-12:00	Rim Rockers	Basketball	Adjoa Sarpong	1
+19	Main Court B	2026-08-16	12:00-14:00	Junior Ballers	Basketball	Adjoa Sarpong	1
+20	Olympic Pool	2026-08-17	06:00-08:00	Aqua Sharks	Swimming	Kofi Owusu	1
+21	Athletics Track	2026-08-18	14:00-16:00	Sprint Squad	Athletics	Efua Asante	1
+22	Main Court A	2026-08-18	18:00-20:00	Ace Netters	Tennis	Abena Nyarko	1

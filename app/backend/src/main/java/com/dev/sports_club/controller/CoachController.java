@@ -1,0 +1,46 @@
+package com.dev.sports_club.controller;
+
+import com.dev.sports_club.dto.CoachRequest;
+import com.dev.sports_club.dto.CoachResponse;
+import com.dev.sports_club.service.CoachService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/coaches")
+@RequiredArgsConstructor
+public class CoachController {
+
+    private final CoachService service;
+
+    @GetMapping
+    public List<CoachResponse> findAll() {
+        return service.findAll();
+    }
+
+    @GetMapping("/{id}")
+    public CoachResponse findById(@PathVariable Integer id) {
+        return service.findById(id);
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public CoachResponse create(@Valid @RequestBody CoachRequest request) {
+        return service.create(request);
+    }
+
+    @PutMapping("/{id}")
+    public CoachResponse update(@PathVariable Integer id, @Valid @RequestBody CoachRequest request) {
+        return service.update(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Integer id) {
+        service.delete(id);
+    }
+}
