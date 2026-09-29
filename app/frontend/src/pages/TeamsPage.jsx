@@ -1,17 +1,36 @@
-import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { normalizeRole } from "../utils/permissions";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Trophy, Users, Plus } from "lucide-react";
-import { getTeams } from "../api/teams";
+import { getTeams, createTeam } from "../api/teams";
+import { Button, ErrorState, PageHeader, TableSkeleton, useToast } from "../components/ui";
+import TeamForm from "../components/teams/TeamForm";
 import TeamList from "../components/teams/TeamList";
 
 function TeamsPage() {
   const [teams, setTeams] = useState([]);
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
+  const [status, setStatus] = useState("loading");
+  const [formOpen, setFormOpen] = useState(false);
+  const { push } = useToast();
+  const { user } = useAuth();
+  const isAdmin = ["Admin", "SuperAdmin"].includes(normalizeRole(user?.role));
+
+  const load = useCallback(() => {
+    setStatus("loading");
     getTeams()
-      .then(setTeams)
-      .catch(() => setTeams([]));
+      .then((data) => { setTeams(data); setStatus("ready"); })
+      .catch(() => setStatus("error"));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleCreate(values) {
+    const created = await createTeam({ name: values.name, sport: values.sport, coachName: values.coachName });
+    setTeams((list) => [created, ...list]);
+    push("Team created");
+  }
 
   const filteredTeams = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -35,6 +54,24 @@ function TeamsPage() {
     teams.map((team) => team.sport).filter(Boolean)
   ).size;
 
+  if (status === "loading") {
+    return (
+      <div className="space-y-6">
+        <PageHeader eyebrow="Management" title="Teams" />
+        <TableSkeleton rows={6} />
+      </div>
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <div className="space-y-6">
+        <PageHeader eyebrow="Management" title="Teams" />
+        <ErrorState title="Couldn't load teams" onRetry={load} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -53,10 +90,7 @@ function TeamsPage() {
           </p>
         </div>
 
-        <button className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700">
-          <Plus size={18} />
-          Add Team
-        </button>
+        {isAdmin && <Button icon={Plus} onClick={() => setFormOpen(true)}>Add Team</Button>}
       </div>
 
       {/* Statistics */}
@@ -141,6 +175,7 @@ function TeamsPage() {
           </p>
         </div>
       )}
+      <TeamForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={handleCreate} />
     </div>
   );
 }

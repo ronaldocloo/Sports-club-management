@@ -1,17 +1,16 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Bell, CalendarDays, CreditCard, Building2, Trophy, UserPlus } from 'lucide-react'
-import { notifications as seed } from '../../mocks/demoData'
+import { useNotifications } from './NotificationsContext'
 import useClickOutside from '../../hooks/useClickOutside'
 
 const icons = { membership: CreditCard, competition: Trophy, athlete: UserPlus, payment: CreditCard, facility: Building2, event: CalendarDays }
 
 function NotificationsMenu() {
   const [open, setOpen] = useState(false)
-  const [items, setItems] = useState(seed)
+  const { items, unread, markAllRead } = useNotifications()
   const ref = useRef(null)
   useClickOutside(ref, () => setOpen(false))
-  const unread = items.filter((n) => n.unread).length
 
   return (
     <div ref={ref} className="relative">
@@ -25,12 +24,12 @@ function NotificationsMenu() {
         <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-gray-200 bg-white shadow-lg">
           <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
             <p className="text-sm font-semibold text-gray-900">Notifications</p>
-            <button onClick={() => setItems((all) => all.map((n) => ({ ...n, unread: false })))} className="text-xs font-medium text-blue-600 hover:text-blue-700">
+            <button onClick={markAllRead} className="text-xs font-medium text-blue-600 hover:text-blue-700">
               Mark all read
             </button>
           </div>
           <ul className="max-h-80 divide-y divide-gray-50 overflow-y-auto">
-            {items.map((n) => {
+            {items.slice(0, 6).map((n) => {
               const Icon = icons[n.kind] || Bell
               return (
                 <li key={n.id} className={`flex gap-3 px-4 py-3 ${n.unread ? 'bg-blue-50/40' : ''}`}>

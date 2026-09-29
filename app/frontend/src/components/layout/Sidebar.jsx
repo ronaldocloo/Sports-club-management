@@ -2,11 +2,17 @@ import { useState } from 'react'
 import { NavLink, Link } from 'react-router-dom'
 import { ChevronDown, Trophy, X } from 'lucide-react'
 import { navGroups } from './navConfig'
+import { useAuth } from '../../context/AuthContext'
+import { canAccess } from '../../utils/permissions'
 
 // Desktop (lg+): full sidebar with collapsible groups.
 // Tablet (md): icon rail. Mobile: slide-out drawer.
 function Sidebar({ mobileOpen, onClose }) {
   const [collapsed, setCollapsed] = useState({})
+  const { user } = useAuth()
+  const groups = navGroups
+    .map((g) => ({ ...g, items: g.items.filter((i) => canAccess(user?.role, i.path)) }))
+    .filter((g) => g.items.length > 0)
 
   return (
     <>
@@ -32,7 +38,7 @@ function Sidebar({ mobileOpen, onClose }) {
         </div>
 
         <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
-          {navGroups.map((group) => {
+          {groups.map((group) => {
             const isCollapsed = collapsed[group.label]
             const single = group.items.length === 1
             return (

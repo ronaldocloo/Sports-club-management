@@ -1,10 +1,10 @@
 import {
   LayoutDashboard, Users, UserCog, Shield, Trophy, Layers, CreditCard, Wallet,
-  Building2, CalendarCheck, CalendarDays, BarChart3, FileText, UserRound, Bell, Settings,
+  Building2, CalendarCheck, UserCircle, CalendarDays, BarChart3, FileText, UserRound, Bell, Settings,
 } from 'lucide-react'
 
 export const navGroups = [
-  { label: 'Main', items: [{ name: 'Dashboard', path: '/', icon: LayoutDashboard }] },
+  { label: 'Main', items: [{ name: 'Dashboard', path: '/', icon: LayoutDashboard }, { name: 'My Profile', path: '/me', icon: UserCircle }] },
   {
     label: 'Management',
     items: [
@@ -43,3 +43,5 @@ export const navGroups = [
 ]
 
 export const flatNav = navGroups.flatMap((g) => g.items)
+
+export const pathTitles = Object.fromEntries(flatNav.map((n) => [n.path, n.name]))

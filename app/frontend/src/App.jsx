@@ -2,7 +2,13 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import AppShell from "./components/layout/AppShell";
 
-import HomePage from "./pages/HomePage";
+import DashboardPage from "./pages/DashboardPage";
+import LandingPage from "./pages/LandingPage";
+import MyProfilePage from "./pages/MyProfilePage";
+import SportsPage from "./pages/SportsPage";
+import UsersPage from "./pages/UsersPage";
+import NotificationsPage from "./pages/NotificationsPage";
+import SettingsPage from "./pages/SettingsPage";
 import LoginPage from "./pages/LoginPage";
 import AthletesPage from "./pages/AthletesPage";
 import AthleteDetailPage from "./pages/AthleteDetailPage";
@@ -19,23 +25,19 @@ import BookingsPage from "./pages/BookingsPage";
 import EventsPage from "./pages/EventsPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import ReportsPage from "./pages/ReportsPage";
-import PlaceholderPage from "./pages/PlaceholderPage";
 
 import RequireAuth from "./components/auth/RequireAuth";
-
-// Sections whose pages are not built yet render a placeholder so navigation never 404s.
-const upcomingPaths = [
-  "sports", "users", "notifications", "settings",
-];
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/welcome" element={<LandingPage />} />
 
         <Route element={<AppShell />}>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/" element={<RequireAuth><DashboardPage /></RequireAuth>} />
+          <Route path="/me" element={<RequireAuth><MyProfilePage /></RequireAuth>} />
 
           <Route path="/athletes" element={<RequireAuth><AthletesPage /></RequireAuth>} />
           <Route path="/athletes/:athleteId" element={<RequireAuth><AthleteDetailPage /></RequireAuth>} />
@@ -54,9 +56,10 @@ function App() {
           <Route path="/analytics" element={<RequireAuth><AnalyticsPage /></RequireAuth>} />
           <Route path="/reports" element={<RequireAuth><ReportsPage /></RequireAuth>} />
 
-          {upcomingPaths.map((path) => (
-            <Route key={path} path={`/${path}`} element={<RequireAuth><PlaceholderPage /></RequireAuth>} />
-          ))}
+          <Route path="/sports" element={<RequireAuth><SportsPage /></RequireAuth>} />
+          <Route path="/users" element={<RequireAuth><UsersPage /></RequireAuth>} />
+          <Route path="/notifications" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
+          <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
         </Route>
       </Routes>
     </BrowserRouter>

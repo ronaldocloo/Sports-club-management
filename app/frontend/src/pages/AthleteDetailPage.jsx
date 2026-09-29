@@ -42,8 +42,10 @@ function Stat({ icon: Icon, label, value }) {
   )
 }
 
-function AthleteDetailPage() {
-  const { athleteId } = useParams()
+// `athleteId` and `portal` are set when this page is used as the athlete's own profile (/me).
+function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
+  const params = useParams()
+  const athleteId = fixedId ?? params.athleteId
   const [p, setP] = useState(null)
   const [status, setStatus] = useState('loading')
 
@@ -54,7 +56,7 @@ function AthleteDetailPage() {
 
   useEffect(() => { load() }, [load])
 
-  const back = (
+  const back = portal ? null : (
     <Link to="/athletes" className="inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-900">
       <ArrowLeft size={16} /> Back to Athletes
     </Link>

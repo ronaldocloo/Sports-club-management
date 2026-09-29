@@ -86,6 +86,11 @@ export const notifications = [
   { id: 3, kind: 'athlete', text: 'New athlete registered: Kwame Mensah.', time: '2 hours ago', unread: true },
   { id: 4, kind: 'payment', text: 'Payment received: GH₵350 from Efua Boateng.', time: 'Yesterday', unread: false },
   { id: 5, kind: 'facility', text: 'Facility booking approved: Indoor Basketball Court.', time: 'Yesterday', unread: false },
+  { id: 6, kind: 'facility', text: 'Olympic Pool is under maintenance until further notice.', time: 'Yesterday', unread: false },
+  { id: 7, kind: 'payment', text: 'Payment failed for Nii Lamptey (MTN MoMo).', time: '2 days ago', unread: false },
+  { id: 8, kind: 'event', text: 'Coaches Workshop starts Sunday at 10:00.', time: '2 days ago', unread: false },
+  { id: 9, kind: 'membership', text: '18 memberships expire within 30 days.', time: '3 days ago', unread: false },
+  { id: 10, kind: 'competition', text: 'Registration for Kwame Cup closes on 25 October.', time: '4 days ago', unread: false },
 ]
 
 // Items the global search looks through (in addition to live API data).

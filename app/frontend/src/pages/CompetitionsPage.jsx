@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { normalizeRole } from "../utils/permissions";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Search,
   Trophy,
@@ -6,18 +8,35 @@ import {
   MapPin,
   Plus,
 } from "lucide-react";
-import { getCompetitions } from "../api/competitions";
+import { getCompetitions, createCompetition } from "../api/competitions";
+import { Button, ErrorState, PageHeader, TableSkeleton, useToast } from "../components/ui";
+import CompetitionForm from "../components/competitions/CompetitionForm";
 import CompetitionList from "../components/competitions/CompetitionList";
 
 function CompetitionsPage() {
   const [competitions, setCompetitions] = useState([]);
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
+  const [status, setStatus] = useState("loading");
+  const [formOpen, setFormOpen] = useState(false);
+  const { push } = useToast();
+  const { user } = useAuth();
+  const isAdmin = ["Admin", "SuperAdmin"].includes(normalizeRole(user?.role));
+
+  const load = useCallback(() => {
+    setStatus("loading");
     getCompetitions()
-      .then(setCompetitions)
-      .catch(() => setCompetitions([]));
+      .then((data) => { setCompetitions(data); setStatus("ready"); })
+      .catch(() => setStatus("error"));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleCreate(values) {
+    const created = await createCompetition(values);
+    setCompetitions((list) => [created, ...list]);
+    push("Competition created");
+  }
 
   const filteredCompetitions = useMemo(() => {
     const query = search.toLowerCase().trim();
@@ -45,6 +64,24 @@ function CompetitionsPage() {
     });
   }, [competitions, search]);
 
+  if (status === "loading") {
+    return (
+      <div className="space-y-6">
+        <PageHeader eyebrow="Management" title="Competitions" />
+        <TableSkeleton rows={6} />
+      </div>
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <div className="space-y-6">
+        <PageHeader eyebrow="Management" title="Competitions" />
+        <ErrorState title="Couldn't load competitions" onRetry={load} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -63,10 +100,7 @@ function CompetitionsPage() {
           </p>
         </div>
 
-        <button className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700">
-          <Plus size={18} />
-          Add Competition
-        </button>
+        {isAdmin && <Button icon={Plus} onClick={() => setFormOpen(true)}>Add Competition</Button>}
       </div>
 
       {/* Statistics */}
@@ -171,6 +205,7 @@ function CompetitionsPage() {
           </p>
         </div>
       )}
+      <CompetitionForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={handleCreate} />
     </div>
   );
 }
