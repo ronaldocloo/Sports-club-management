@@ -4,6 +4,7 @@ import { createUser, getUsers, updateUser } from '../api/operations'
 import { getAthletes } from '../api/athletes'
 import { getCoaches } from '../api/coaches'
 import { errorMessage, USE_MOCKS } from '../api/client'
+import { passwordError } from '../utils/passwordPolicy'
 import { useAuth } from '../context/AuthContext'
 import { ROLE_LABELS, moduleList, roleAccess } from '../utils/permissions'
 import useAsync from '../hooks/useAsync'
@@ -44,7 +45,7 @@ function UserModal({ open, coaches, athletes, onClose, onSave }) {
     if (USE_MOCKS && !v.name.trim()) err.name = 'Full name is required.'
     if (!/^[a-z0-9._-]{3,}$/i.test(v.username)) err.username = 'Use at least 3 letters, numbers, dots or dashes.'
     if (USE_MOCKS && !/^\S+@\S+\.\S+$/.test(v.email)) err.email = 'Enter a valid email address.'
-    if (!USE_MOCKS && v.password.length < 8) err.password = 'Use at least 8 characters.'
+    if (!USE_MOCKS && passwordError(v.password, v.username)) err.password = passwordError(v.password, v.username)
     if (!v.role) err.role = 'Select a role.'
     if (!USE_MOCKS && (v.role === 'Coach' || v.role === 'Athlete') && !v.link) err.link = `Link this account to ${v.role === 'Athlete' ? 'an athlete' : 'a coach'} record.`
     setErrors(err)
@@ -67,7 +68,7 @@ function UserModal({ open, coaches, athletes, onClose, onSave }) {
         {USE_MOCKS && <Input label="Full name" required value={v.name} onChange={set('name')} error={errors.name} />}
         <Input label="Username" required value={v.username} onChange={set('username')} error={errors.username} autoComplete="off" />
         {USE_MOCKS && <div className="sm:col-span-2"><Input label="Email" required type="email" value={v.email} onChange={set('email')} error={errors.email} /></div>}
-        {!USE_MOCKS && <div className="sm:col-span-2"><Input label="Password" required type="password" value={v.password} onChange={set('password')} error={errors.password} hint="At least 8 characters. Share it with the user securely; they can change it in Settings." autoComplete="new-password" /></div>}
+        {!USE_MOCKS && <div className="sm:col-span-2"><Input label="Password" required type="password" value={v.password} onChange={set('password')} error={errors.password} hint="At least 8 characters with a letter and a number. Share it securely; they can change it in Settings." autoComplete="new-password" /></div>}
         <div className="sm:col-span-2"><Select label="Role" required options={roles.map((value) => ({ value, label: ROLE_LABELS[value] }))} placeholder="Select role" value={v.role} onChange={set('role')} error={errors.role} /></div>
         {!USE_MOCKS && <div className="sm:col-span-2"><LinkField role={v.role} value={v.link} onChange={set('link')} coaches={coaches} athletes={athletes} error={errors.link} /></div>}
         {errors.submit && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-2">{errors.submit}</p>}
@@ -121,7 +122,7 @@ function ResetPasswordModal({ user, onClose, onSave }) {
 
   async function submit(e) {
     e.preventDefault()
-    if (pw.length < 8) return setError('Use at least 8 characters.')
+    if (passwordError(pw, user?.username)) return setError(passwordError(pw, user?.username))
     setSaving(true)
     try {
       await onSave(user, { password: pw })

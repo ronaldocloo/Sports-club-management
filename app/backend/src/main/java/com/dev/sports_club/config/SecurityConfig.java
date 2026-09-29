@@ -11,6 +11,11 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import com.dev.sports_club.security.CsrfCookieFilter;
+import com.dev.sports_club.security.SpaCsrfTokenRequestHandler;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
@@ -38,9 +43,17 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http, ActiveUserFilter activeUserFilter) throws Exception {
         http
                 .addFilterAfter(activeUserFilter, SecurityContextHolderFilter.class)
-                // REST API consumed by a separate React frontend, not a server-rendered
-                // HTML form — CSRF protection is designed for the latter, so it's disabled here.
-                .csrf(csrf -> csrf.disable())
+                // Cookie-based sessions need CSRF protection. The token lives in a readable XSRF-TOKEN cookie
+                // and the app sends it back in the X-XSRF-TOKEN header on every write.
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
+                .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
+                .headers(headers -> headers
+                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'none'; frame-ancestors 'none'"))
+                        .referrerPolicy(ref -> ref.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
+                        .permissionsPolicyHeader(pp -> pp.policy("geolocation=(), microphone=(), camera=(), payment=()"))
+                        .frameOptions(frame -> frame.deny()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login").permitAll()

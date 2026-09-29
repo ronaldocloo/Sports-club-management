@@ -4,6 +4,7 @@ import { Check, Search } from 'lucide-react'
 import { getAuditLog } from '../api/operations'
 import { changePassword } from '../api/auth'
 import { errorMessage, USE_MOCKS } from '../api/client'
+import { passwordError } from '../utils/passwordPolicy'
 import useAsync from '../hooks/useAsync'
 import { getCurrentOrganization, renameCurrentOrganization } from '../api/organizations'
 import { useOrganization } from '../context/OrganizationContext'
@@ -69,7 +70,7 @@ function ProfileTab() {
     e.preventDefault()
     const err = {}
     if (!pw.current) err.current = 'Enter your current password.'
-    if (pw.next.length < 8) err.next = 'Use at least 8 characters.'
+    if (passwordError(pw.next, user?.username)) err.next = passwordError(pw.next, user?.username)
     else if (pw.next === pw.current) err.next = 'Choose a password different from the current one.'
     if (pw.confirm !== pw.next) err.confirm = 'Passwords do not match.'
     setErrors(err)

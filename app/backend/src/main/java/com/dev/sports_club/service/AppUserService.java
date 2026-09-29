@@ -1,6 +1,7 @@
 package com.dev.sports_club.service;
 
 import com.dev.sports_club.dto.AppUserRequest;
+import com.dev.sports_club.security.PasswordPolicy;
 import com.dev.sports_club.dto.ChangePasswordRequest;
 import com.dev.sports_club.entity.AppUserRole;
 import com.dev.sports_club.exception.BusinessRuleViolationException;
@@ -70,6 +71,7 @@ public class AppUserService {
         if (request.getPassword() == null || request.getPassword().isBlank()) {
             throw new BusinessRuleViolationException("A password of at least 8 characters is required for a new user");
         }
+        PasswordPolicy.validate(request.getPassword(), request.getUsername());
         if (repository.findByUsername(request.getUsername()).isPresent()) {
             throw new BusinessRuleViolationException("Username is already taken: " + request.getUsername());
         }
@@ -112,7 +114,14 @@ public class AppUserService {
 
         entity.setUsername(request.getUsername());
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            PasswordPolicy.validate(request.getPassword(), entity.getUsername());
             entity.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+            entity.setFailedAttempts(0);
+            entity.setLockedUntil(null);
+        }
+        if (Boolean.TRUE.equals(request.getIsActive())) {
+            entity.setFailedAttempts(0);
+            entity.setLockedUntil(null);
         }
         entity.setRole(request.getRole());
         entity.setCoachId(request.getCoachId());
@@ -121,6 +130,36 @@ public class AppUserService {
             entity.setIsActive(request.getIsActive());
         }
         return toResponse(repository.save(entity));
+    }
+
+    public static final int MAX_FAILED_ATTEMPTS = 5;
+    public static final int LOCK_MINUTES = 15;
+
+    /** Counts a wrong password; after {@value #MAX_FAILED_ATTEMPTS} in a row the account is locked for {@value #LOCK_MINUTES} minutes. */
+    public void recordFailedLogin(String username) {
+        repository.findByUsername(username).ifPresent(u -> {
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            if (u.getLockedUntil() != null && u.getLockedUntil().isAfter(now)) {
+                return; // already locked: further attempts do not extend the lock
+            }
+            if (u.getLockedUntil() != null) {
+                u.setFailedAttempts(0);
+                u.setLockedUntil(null);
+            }
+            u.setFailedAttempts((u.getFailedAttempts() == null ? 0 : u.getFailedAttempts()) + 1);
+            if (u.getFailedAttempts() >= MAX_FAILED_ATTEMPTS) {
+                u.setLockedUntil(now.plusMinutes(LOCK_MINUTES));
+            }
+            repository.save(u);
+        });
+    }
+
+    public void recordSuccessfulLogin(String username) {
+        repository.findByUsername(username).ifPresent(u -> {
+            u.setFailedAttempts(0);
+            u.setLockedUntil(null);
+            repository.save(u);
+        });
     }
 
     /** Lets a signed-in user change their own password after proving they know the current one. */
@@ -133,6 +172,7 @@ public class AppUserService {
         if (passwordEncoder.matches(request.getNewPassword(), entity.getPasswordHash())) {
             throw new BusinessRuleViolationException("New password must be different from the current password");
         }
+        PasswordPolicy.validate(request.getNewPassword(), entity.getUsername());
         entity.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         repository.save(entity);
     }

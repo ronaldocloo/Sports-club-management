@@ -42,6 +42,7 @@ public class AuthController {
             authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
         } catch (org.springframework.security.core.AuthenticationException e) {
+            appUserService.recordFailedLogin(request.getUsername());
             audit.recordFor(request.getUsername(), AuditAction.LOGIN_FAILED, "Failed sign-in for " + request.getUsername());
             throw e;
         }
@@ -59,6 +60,8 @@ public class AuthController {
         AppUser user = appUserRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> new EntityNotFoundException("AppUser not found: " + request.getUsername()));
         user.setLastLogin(LocalDateTime.now());
+        user.setFailedAttempts(0);
+        user.setLockedUntil(null);
         appUserRepository.save(user);
         audit.recordFor(user.getUsername(), AuditAction.LOGIN, user.getUsername() + " signed in");
 

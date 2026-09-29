@@ -29,7 +29,7 @@ public class AppUserDetailsService implements UserDetailsService {
                 .password(user.getPasswordHash())
                 .authorities(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
                 .disabled(!Boolean.TRUE.equals(user.getIsActive()))
-                .accountLocked(organizationSuspended(user))
+                .accountLocked(organizationSuspended(user) || isLocked(user))
                 .build();
     }
 
@@ -40,5 +40,9 @@ public class AppUserDetailsService implements UserDetailsService {
         return organizationRepository.findById(user.getOrganizationId())
                 .map(o -> o.getStatus() == OrganizationStatus.Suspended)
                 .orElse(true);
+    }
+
+    private boolean isLocked(AppUser user) {
+        return user.getLockedUntil() != null && user.getLockedUntil().isAfter(java.time.LocalDateTime.now());
     }
 }

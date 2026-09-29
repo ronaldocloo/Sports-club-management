@@ -9,6 +9,7 @@ import com.dev.sports_club.entity.OrganizationPlan;
 import com.dev.sports_club.entity.OrganizationStatus;
 import com.dev.sports_club.exception.BusinessRuleViolationException;
 import com.dev.sports_club.repository.AppUserRepository;
+import com.dev.sports_club.security.PasswordPolicy;
 import com.dev.sports_club.repository.OrganizationRepository;
 import com.dev.sports_club.tenant.TenantContext;
 import jakarta.persistence.EntityNotFoundException;
@@ -45,6 +46,7 @@ public class OrganizationService {
                 || request.getAdminPassword() == null) {
             throw new BusinessRuleViolationException("An admin username and password (8+ characters) are required");
         }
+        PasswordPolicy.validate(request.getAdminPassword(), request.getAdminUsername());
         if (repository.existsByNameIgnoreCase(request.getName().trim())) {
             throw new BusinessRuleViolationException("An organization with this name already exists");
         }

@@ -33,6 +33,7 @@ mysql -u root -p sports_club < data/01_seed.sql
 mysql -u root -p sports_club < schema/04_phase3_auth.sql   # Athlete role + account linking (safe to re-run)
 mysql -u root -p sports_club < schema/05_phase4_platform.sql # organizations, fixtures, attendance, events, audit (safe to re-run)
 mysql -u root -p sports_club < schema/06_phase5_reporting.sql # report export audit action + indexes (safe to re-run)
+mysql -u root -p sports_club < schema/07_phase7_security.sql  # login lockout columns (safe to re-run)
 ```
 
 Copy `.env.example` to `.env` and fill in local credentials. Never commit `.env`.
@@ -90,8 +91,26 @@ first three, Coaches the attendance and performance reports for their own teams.
 warnings (an Admin can also trigger it: `POST /api/admin/jobs/run`, for their own organization only). Seed memberships
 with past end dates will therefore become Expired the first time it runs.
 
-**Still demo-only:** the Super Admin "view as" role switcher and sample data exist only in demo mode. Login lockout and
-email (password reset, notification emails) are not implemented.
+**Intelligence.** `/api/intelligence/*` gives explainable, rule-based insight rather than a black box: a retention-risk
+score per athlete (0-100, every point traced to a named factor such as "membership ended 45 days ago"), a 3-month revenue
+forecast from a least-squares trend with an ~80% range and a 60-day renewal pipeline, attendance and facility-demand
+outlooks, and payment anomaly flags (duplicates, repeated failures, refund spikes). It needs enough history to say
+anything (four months for the forecast) and says so instead of guessing. A nudge to an at-risk athlete is always sent by a
+person, never automatically. See `app/backend/.../intelligence` and the Intelligence page.
+
+**Security hardening.** Passwords need 8+ characters with a letter and a number, and cannot be common or contain the
+username. Five wrong passwords lock an account for 15 minutes (the message never says which part was wrong). Requests are
+rate limited per client (login 10/min, exports 20/min, general 600/min; HTTP 429 with `Retry-After`). State-changing calls
+need a CSRF token (`XSRF-TOKEN` cookie echoed in `X-XSRF-TOKEN`; the frontend does this automatically). Responses carry
+CSP, `X-Frame-Options`, `Referrer-Policy` and `Permissions-Policy` headers, and errors never expose stack traces. For
+production run with `--spring.profiles.active=prod` (`application-prod.properties`): no default database credentials, secure
+cookies, SameSite=Strict. Details in `security/02_password_hashing_and_rbac.md`.
+
+**Tests.** `docs/TESTING.md` explains how to run the backend suite (238 tests against a real MariaDB test database),
+the frontend suite (Vitest, 92 tests) and the browser tests (Playwright). CI runs all three (`.github/workflows/ci.yml`).
+
+**Still demo-only:** the Super Admin "view as" role switcher and sample data exist only in demo mode. Email (password
+reset, notification emails) is not implemented.
 
 ## Workflow
 

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Landmark, Plus } from 'lucide-react'
 import { createOrganization, getOrganizations, updateOrganization } from '../api/organizations'
 import { errorMessage } from '../api/client'
+import { passwordError } from '../utils/passwordPolicy'
 import { useOrganization } from '../context/OrganizationContext'
 import useAsync from '../hooks/useAsync'
 import { Badge, Button, Card, EmptyState, ErrorState, Input, Modal, PageHeader, RowMenu, Select, TableSkeleton, useToast } from '../components/ui'
@@ -23,7 +24,7 @@ function OrgModal({ open, onClose, onSave }) {
     const err = {}
     if (!v.name.trim()) err.name = 'Organization name is required.'
     if (!/^[a-z0-9._-]{3,}$/i.test(v.adminUsername)) err.adminUsername = 'Use at least 3 letters, numbers, dots or dashes.'
-    if (v.adminPassword.length < 8) err.adminPassword = 'Use at least 8 characters.'
+    if (passwordError(v.adminPassword, v.adminUsername)) err.adminPassword = passwordError(v.adminPassword, v.adminUsername)
     setErrors(err)
     if (Object.keys(err).length) return
     setSaving(true)

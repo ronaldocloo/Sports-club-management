@@ -130,3 +130,37 @@ Downloads (`format=csv|xlsx|pdf`) are generated on the server from the caller's 
 audit log (action `EXPORT`, with the report, format, period and row count). CSV cells that begin with `=`, `+`, `-` or
 `@` are prefixed with a quote so a spreadsheet does not run them as formulas. Ranges are limited (800 days for
 analytics, 5 years for reports) to keep requests bounded.
+
+## Phase 6 and 7 additions: intelligence access and hardening
+
+### Who can see intelligence
+| Endpoint | Roles |
+|---|---|
+| `/api/intelligence/retention`, `/anomalies` | Admin, Front Desk |
+| `/api/intelligence/retention/{id}/nudge` | Admin, Front Desk (a person sends it; one per athlete per day) |
+| `/api/intelligence/revenue-forecast`, `/facility-demand`, `/attendance-outlook` | Admin |
+| `/api/intelligence/athletes/{id}` | Admin; a Coach for athletes on their own teams; an Athlete for themselves |
+
+Every calculation reads only the caller's organization (the tenant filter applies), and none of it leaves the server.
+
+### Authentication hardening
+- **Password policy** (`PasswordPolicy`): at least 8 characters, a letter and a digit, not in a common-password list, must not contain the username. Applied on account creation, password change, reset and organization setup. The browser applies the same rules first (`utils/passwordPolicy.js`).
+- **Lockout**: `app_user.failed_attempts` and `locked_until` (migration `07_phase7_security.sql`). Five consecutive failures lock the account for 15 minutes; a success resets the count; an Admin resetting the password or reactivating the account also clears it. A locked account gets the same generic 401 as a wrong password, so an attacker cannot tell the difference. Login, failed login, logout and password changes are written to the audit log.
+- **Rate limiting** (`RateLimitFilter`, sliding window per client address): login 10/min, report exports 20/min, everything else 600/min. Over the limit returns 429 with `Retry-After`. Disable only in tests (`app.rate-limit.enabled=false`).
+- **Sessions**: HttpOnly cookie, SameSite Lax (Strict in the `prod` profile), Secure in `prod`, 30 minute idle timeout, and the account is re-checked on every request, so a deactivated user or changed role takes effect immediately.
+
+### Request and response hardening
+- **CSRF** protection is on for every state-changing request (cookie-to-header double submit, `SpaCsrfTokenRequestHandler`).
+- **Headers**: `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, `Cache-Control: no-store` on downloads.
+- **Errors**: validation problems return 400 with a per-field message map; unexpected failures return a generic 500 with no stack trace or SQL. CSV exports neutralise spreadsheet formulas.
+- **Production profile**: `application-prod.properties` has no default database user or password, so the app refuses to start without `DB_USER` / `DB_PASSWORD`.
+
+### How this is tested
+`AuthorizationMatrixIntegrationTest` checks 109 role and endpoint combinations, `TenantIsolationIntegrationTest` proves one organization cannot read, change or delete another's data, and `AuthIntegrationTest` covers lockout, sessions, CSRF and headers. See `docs/TESTING.md`.
+
+### Known limits (be honest with reviewers)
+- The Maven OWASP dependency-check was not run; `npm audit` is clean and runs in CI.
+- Native queries bypass the tenant filter. The only two (`OrganizationRepository`, athlete and user counts for the Super Admin's organization list) filter by an explicit organization id. Any new native query on a tenant table must do the same.
+- Rate limits are per server process (fine for one instance; use a shared store behind several).
+- No password reset by email and no multi-factor authentication yet.
+

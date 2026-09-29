@@ -43,6 +43,12 @@ public class AppUser {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
 
+    @Column(name = "failed_attempts", nullable = false)
+    private Integer failedAttempts = 0;
+
+    @Column(name = "locked_until")
+    private LocalDateTime lockedUntil;
+
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 }

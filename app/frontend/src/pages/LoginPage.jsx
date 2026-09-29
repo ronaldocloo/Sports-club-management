@@ -26,7 +26,7 @@ function LoginPage() {
       const signedIn = await login(username, password)
       navigate(from && canAccess(signedIn.role, from.split('?')[0]) ? from : homeFor(signedIn.role), { replace: true })
     } catch (e) {
-      setError(e?.response?.status === 401 ? 'Invalid username or password. If you are sure they are right, your account may be deactivated.' : errorMessage(e, 'We could not sign you in. Please try again.'))
+      setError(e?.response?.status === 401 ? 'Invalid username or password. After several wrong attempts an account is locked for 15 minutes, and deactivated accounts cannot sign in.' : errorMessage(e, 'We could not sign you in. Please try again.'))
     } finally {
       setSubmitting(false)
     }
