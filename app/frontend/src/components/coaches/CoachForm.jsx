@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { errorMessage } from '../../api/client'
+import { getSports } from '../../api/sports'
 import { Button, Input, Modal, Select } from '../ui'
 
-const sportOptions = ['Football', 'Basketball', 'Athletics', 'Volleyball', 'Swimming', 'Badminton']
 const empty = { firstName: '', lastName: '', sport: '', specialization: '', experienceYears: '', email: '', phone: '' }
 
 function validate(v) {
@@ -9,6 +10,7 @@ function validate(v) {
   if (!v.firstName.trim()) e.firstName = 'First name is required.'
   if (!v.lastName.trim()) e.lastName = 'Last name is required.'
   if (!v.sport) e.sport = 'Please select a sport.'
+  if (!v.phone.trim()) e.phone = 'Phone number is required.'
   if (!v.email.trim()) e.email = 'Email is required.'
   else if (!/^\S+@\S+\.\S+$/.test(v.email)) e.email = 'Enter a valid email address.'
   if (v.experienceYears !== '' && (Number(v.experienceYears) < 0 || Number(v.experienceYears) > 60)) e.experienceYears = 'Enter a value between 0 and 60.'
@@ -20,6 +22,11 @@ function CoachForm({ open, onClose, onSubmit }) {
   const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [sportOptions, setSportOptions] = useState([])
+
+  useEffect(() => {
+    if (open) getSports().then((l) => setSportOptions(l.map((x) => x.name))).catch(() => setSportOptions([]))
+  }, [open])
 
   const set = (field) => (e) => setValues((v) => ({ ...v, [field]: e.target.value }))
 
@@ -38,8 +45,8 @@ function CoachForm({ open, onClose, onSubmit }) {
     try {
       await onSubmit(values)
       close()
-    } catch {
-      setSubmitError("We couldn't save this coach. Please try again.")
+    } catch (e) {
+      setSubmitError(errorMessage(e, "We couldn't save this coach. Please try again."))
     } finally {
       setSaving(false)
     }
@@ -66,7 +73,7 @@ function CoachForm({ open, onClose, onSubmit }) {
           <Input label="Specialization" placeholder="e.g. Goalkeeping" value={values.specialization} onChange={set('specialization')} />
         </div>
         <Input label="Email" required type="email" value={values.email} onChange={set('email')} error={errors.email} />
-        <Input label="Phone" type="tel" placeholder="+233 …" value={values.phone} onChange={set('phone')} />
+        <Input label="Phone" required type="tel" placeholder="+233 …" value={values.phone} onChange={set('phone')} error={errors.phone} />
         {submitError && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-2">{submitError}</p>}
       </form>
     </Modal>

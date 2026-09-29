@@ -1,195 +1,210 @@
-import { mockAthletes, mockCompetitions, mockTeams } from '../mocks/mockData'
-import { buildAthleteProfile, membershipFor, planPrices } from '../mocks/athleteData'
+import { USE_MOCKS } from './client'
+import { loadAll } from './raw'
+import { getAthleteDirectory, getAthleteGrowth } from './athletes'
+import { getCompetitions } from './competitions'
+import { getSports } from './sports'
+import { getTeams } from './teams'
+import { bookingConfig, getBookings, getFacilities, getMembers, getMembershipPlans, getPayments, getRevenueByMonth } from './operations'
+import { buildAthleteProfile } from '../mocks/athleteData'
 import { competitionDetails } from '../mocks/competitionData'
-import { athleteGrowth, revenueByMonth, sports } from '../mocks/demoData'
-import { initialBookings, initialFacilities, initialPayments, timeSlots, weekDays } from '../mocks/operationsData'
+import { mockAthletes, mockCompetitions } from '../mocks/mockData'
 import { membershipStatus } from '../utils/membership'
+import { TODAY_ISO } from '../utils/today'
 
-// Analytics and reports are derived from the same demo data the other pages use, so the
-// numbers agree across the app. Swap `collect()` for API calls when the backend is ready.
-const delay = (ms = 600) => new Promise((resolve) => setTimeout(resolve, ms))
+// Analytics and reports are computed from the same API functions every page uses, so the
+// numbers agree across the app in both demo and real mode. Where the backend does not track
+// something (attendance, match results) the value is null and the UI says so.
 
-function age(dob) {
-  const d = new Date(dob)
-  const now = new Date('2026-09-29')
-  let a = now.getFullYear() - d.getFullYear()
-  if (now < new Date(now.getFullYear(), d.getMonth(), d.getDate())) a--
-  return a
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const dayIndex = (iso) => (new Date(iso).getDay() + 6) % 7
+const money = (v) => `GH₵${Math.round(v).toLocaleString('en-GH')}`
+const pct = (a, b) => (b ? Math.round(((a - b) / b) * 1000) / 10 : 0)
+
+async function collect() {
+  const [directory, members, payments, facilities, bookings, teams, sports, plans, revenue, growth] = await Promise.all([
+    getAthleteDirectory(), getMembers(), getPayments(), getFacilities(), getBookings(), getTeams(), getSports(), getMembershipPlans(), getRevenueByMonth(), getAthleteGrowth(),
+  ])
+  const withState = members.map((m) => ({ ...m, state: membershipStatus(m) }))
+  return { directory, members: withState, payments, facilities, bookings, teams, sports, plans, revenue, growth }
 }
 
-function collect() {
-  const profiles = mockAthletes.map((a) => buildAthleteProfile(a))
-  const members = mockAthletes.map((a) => {
-    const m = membershipFor(a.athleteId)
-    return { athlete: a, ...m, state: membershipStatus(m) }
+function demand(bookings, slots) {
+  const grid = DAYS.map(() => slots.map(() => 0))
+  bookings.forEach((b) => {
+    const si = slots.indexOf(b.time)
+    if (si >= 0) grid[dayIndex(b.date)][si]++
   })
-
-  const records = {}
-  mockCompetitions.forEach((c) => {
-    competitionDetails[c.competitionId]?.fixtures.forEach((f) => {
-      if (f.status !== 'Completed') return
-      ;[[f.home, f.homeScore, f.awayScore], [f.away, f.awayScore, f.homeScore]].forEach(([team, gf, ga]) => {
-        const r = (records[team] ||= { team, sport: c.sport, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, points: 0 })
-        r.played++; r.gf += gf; r.ga += ga
-        if (gf > ga) { r.won++; r.points += 3 } else if (gf === ga) { r.drawn++; r.points++ } else r.lost++
-      })
-    })
-  })
-
-  return { profiles, members, records }
-}
-
-function demand() {
-  const grid = weekDays.map((d) => timeSlots.map((t) => initialBookings.filter((b) => b.date === d.date && b.time === t).length))
   let best = { day: 0, slot: 0, count: -1 }
   grid.forEach((row, di) => row.forEach((count, si) => { if (count > best.count) best = { day: di, slot: si, count } }))
-  return { grid, best, max: best.count }
+  // Hide weekend rows when there are no weekend bookings, to keep the grid compact.
+  const useDays = DAYS.filter((_, i) => i < 5 || grid[i].some(Boolean))
+  return { grid: grid.slice(0, useDays.length), days: useDays, slots, best, max: Math.max(best.count, 0) }
+}
+
+// Team performance table. Demo: results from fixtures. Real: competition entries (position, points).
+async function teamPerformance(teams) {
+  if (USE_MOCKS) {
+    const records = {}
+    mockCompetitions.forEach((c) => {
+      competitionDetails[c.competitionId]?.fixtures.forEach((f) => {
+        if (f.status !== 'Completed') return
+        ;[[f.home, f.homeScore, f.awayScore], [f.away, f.awayScore, f.homeScore]].forEach(([team, gf, ga]) => {
+          const r = (records[team] ||= { team, played: 0, won: 0, drawn: 0, lost: 0, points: 0 })
+          r.played++
+          if (gf > ga) { r.won++; r.points += 3 } else if (gf === ga) { r.drawn++; r.points++ } else r.lost++
+        })
+      })
+    })
+    const rows = Object.values(records).sort((a, b) => b.points - a.points).map((r) => [r.team, r.played, r.won, r.drawn, r.lost, `${Math.round((r.won / r.played) * 100)}%`, r.points])
+    return { columns: ['Team', 'P', 'W', 'D', 'L', 'Win %', 'Pts'], rows, subtitle: 'Results from completed competitions' }
+  }
+  const raw = await loadAll()
+  const rows = teams.map((t) => {
+    const entries = raw.teamCompetitions.filter((e) => e.teamId === t.teamId)
+    const positions = entries.map((e) => e.finalPosition).filter(Boolean)
+    return [t.teamName, t.sport || '—', t.roster.length, entries.length, positions.length ? `#${Math.min(...positions)}` : '—', entries.reduce((s, e) => s + (e.pointsScored || 0), 0)]
+  }).sort((a, b) => b[5] - a[5] || b[3] - a[3])
+  return { columns: ['Team', 'Sport', 'Athletes', 'Competitions', 'Best finish', 'Points'], rows, subtitle: 'Competition entries and final positions' }
+}
+
+function attentionList(directory, members) {
+  const flagged = new Map()
+  const add = (id, name, sport, reason) => {
+    const cur = flagged.get(id) || { athleteId: id, name, sport: sport || '—', reasons: [] }
+    cur.reasons.push(reason)
+    flagged.set(id, cur)
+  }
+  if (USE_MOCKS) {
+    mockAthletes.forEach((a) => {
+      const p = buildAthleteProfile(a)
+      const drop = p.attendance.earlierRate - p.attendance.recentRate
+      if (drop >= 15) add(a.athleteId, `${a.firstName} ${a.lastName}`, a.sport, `Attendance down ${drop}% over the last 12 sessions`)
+    })
+  }
+  const seen = new Set()
+  members.forEach((m) => {
+    if (seen.has(m.athleteId)) return
+    if (m.state.key === 'Expiring') { seen.add(m.athleteId); add(m.athleteId, m.name, m.sport, `Membership expires in ${m.state.days} days`) }
+    if (m.state.key === 'Expired') { seen.add(m.athleteId); add(m.athleteId, m.name, m.sport, 'Membership expired') }
+  })
+  return [...flagged.values()].sort((a, b) => b.reasons.length - a.reasons.length)
 }
 
 export async function getAnalytics() {
-  await delay()
-  const { profiles, members, records } = collect()
-
-  const byState = { Active: 0, Expiring: 0, Expired: 0, Pending: 0 }
-  members.forEach((m) => { byState[m.state.key]++ })
+  const d = await collect()
+  const { members, facilities, bookings, revenue, growth, directory, payments } = d
+  const state = { Active: 0, Expiring: 0, Expired: 0, Pending: 0, Suspended: 0 }
+  members.forEach((m) => { state[m.state.key]++ })
   const membershipBreakdown = [
-    { name: 'Active', value: byState.Active, color: '#10b981' },
-    { name: 'Expiring soon', value: byState.Expiring, color: '#f59e0b' },
-    { name: 'Expired', value: byState.Expired, color: '#ef4444' },
-    { name: 'Pending', value: byState.Pending, color: '#94a3b8' },
-  ]
+    { name: 'Active', value: state.Active, color: '#10b981' },
+    { name: 'Expiring soon', value: state.Expiring, color: '#f59e0b' },
+    { name: 'Expired', value: state.Expired, color: '#ef4444' },
+    { name: 'Pending', value: state.Pending + state.Suspended, color: '#94a3b8' },
+  ].filter((m) => m.value > 0)
 
-  const sportCounts = sports.map((s) => ({ name: s.name, value: mockAthletes.filter((a) => a.sport === s.name).length, color: s.color }))
-  const facilityUse = initialFacilities.map((f) => ({ name: f.name.replace(' Court', '').replace(' Pitch', ''), utilization: f.utilization }))
+  const sportCounts = d.sports.map((s) => ({ name: s.name, value: directory.filter((a) => a.sport === s.name).length, color: s.color })).filter((s) => s.value > 0)
+  const facilityUse = facilities.map((f) => ({ name: f.name.replace(' Court', '').replace(' Pitch', ''), utilization: f.utilization }))
 
-  const teamRows = Object.values(records)
-    .map((r) => ({ ...r, winRate: Math.round((r.won / r.played) * 100) }))
-    .sort((a, b) => b.points - a.points || (b.gf - b.ga) - (a.gf - a.ga))
+  const totals = revenue.map((m) => m.memberships + m.competitions + m.facilities + m.other)
+  const last = totals.at(-1) ?? 0
+  const revChange = pct(last, totals.at(-2) ?? 0)
+  const growthChange = growth.length > 1 ? pct(growth.at(-1).athletes, growth.at(-2).athletes) : 0
 
-  const revTotals = revenueByMonth.map((m) => m.memberships + m.competitions + m.facilities + m.other)
-  const last = revTotals.at(-1)
-  const prev = revTotals.at(-2)
-  const revChange = Math.round(((last - prev) / prev) * 1000) / 10
-
-  const expiringMembers = members.filter((m) => m.state.key === 'Expiring')
-  const atRisk = expiringMembers.reduce((s, m) => s + planPrices[m.type], 0)
-  const d = demand()
-  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-  const busiestFacility = [...initialFacilities].sort((a, b) => b.utilization - a.utilization)[0]
-
-  const attention = profiles
-    .map((p) => {
-      const reasons = []
-      const drop = p.attendance.earlierRate - p.attendance.recentRate
-      if (drop >= 15) reasons.push(`Attendance down ${drop}% over the last 12 sessions`)
-      const ms = membershipStatus(p.membership)
-      if (ms.key === 'Expiring') reasons.push(`Membership expires in ${ms.days} days`)
-      if (ms.key === 'Expired') reasons.push('Membership expired')
-      return { athleteId: p.athleteId, name: `${p.firstName} ${p.lastName}`, sport: p.sport, reasons }
-    })
-    .filter((a) => a.reasons.length > 0)
-    .sort((a, b) => b.reasons.length - a.reasons.length)
-
+  const monthly = (m) => d.plans.find((p) => p.name === m.type)?.monthly ?? d.plans.find((p) => p.name === m.type)?.price ?? 0
+  const expiring = members.filter((m) => m.state.key === 'Expiring')
+  const atRisk = expiring.reduce((s, m) => s + monthly(m), 0)
+  const dm = demand(bookings, bookingConfig.slots)
+  const busiestFacility = [...facilities].sort((a, b) => b.utilization - a.utilization)[0]
+  const attention = attentionList(directory, members)
+  const withAttendance = directory.filter((a) => a.attendance != null)
+  const avgAttendance = withAttendance.length ? Math.round(withAttendance.reduce((s, a) => s + a.attendance, 0) / withAttendance.length) : null
   const decliners = attention.filter((a) => a.reasons.some((r) => r.startsWith('Attendance'))).length
-  const avgAttendance = Math.round(profiles.reduce((s, p) => s + p.attendance.rate, 0) / profiles.length)
-  const utilization = Math.round(initialFacilities.reduce((s, f) => s + f.utilization, 0) / initialFacilities.length)
+
+  const insights = []
+  if (revenue.length > 1) insights.push({ tone: revChange >= 0 ? 'green' : 'red', title: 'Revenue', text: `Monthly revenue ${revChange >= 0 ? 'increased' : 'decreased'} ${Math.abs(revChange)}% compared with the previous month.` })
+  else if (revenue.length === 1) insights.push({ tone: 'blue', title: 'Revenue', text: `${money(last)} collected in ${revenue[0].month}. More months are needed to show a trend.` })
+  if (expiring.length) insights.push({ tone: 'amber', title: 'Memberships', text: `${expiring.length} memberships are likely to expire within the next 30 days, around ${money(atRisk)} in monthly fees.` })
+  else insights.push({ tone: 'green', title: 'Memberships', text: `No memberships expire in the next 30 days. ${state.Expired} have already expired.` })
+  if (dm.best.count > 0 && busiestFacility) insights.push({ tone: 'blue', title: 'Facility demand', text: `${dm.days[dm.best.day]} ${dm.slots[dm.best.slot]} has the highest booking demand. ${busiestFacility.name} is the most utilized facility at ${busiestFacility.utilization}%.` })
+  if (avgAttendance != null) insights.push({ tone: 'red', title: 'Retention', text: `${decliners} athletes show declining attendance. Review them in the attention list below.` })
 
   return {
     kpis: {
-      revenue: last,
-      revChange,
-      athletes: mockAthletes.length,
-      growth: Math.round(((athleteGrowth.at(-1).athletes - athleteGrowth.at(-2).athletes) / athleteGrowth.at(-2).athletes) * 1000) / 10,
-      retention: Math.round(((byState.Active + byState.Expiring) / members.length) * 100),
+      revenue: last, revChange, revenueLabel: revenue.at(-1)?.month || '',
+      athletes: directory.length, growth: growthChange,
+      retention: members.length ? Math.round(((state.Active + state.Expiring) / members.length) * 100) : 0,
       attendance: avgAttendance,
-      utilization,
+      utilization: facilities.length ? Math.round(facilities.reduce((s, f) => s + f.utilization, 0) / facilities.length) : 0,
     },
-    athleteGrowth,
-    revenueByMonth,
-    membershipBreakdown,
-    sportCounts,
-    facilityUse,
-    teamRows,
-    heatmap: { ...d, days: weekDays.map((w) => w.key), slots: timeSlots },
-    insights: [
-      { tone: 'green', title: 'Revenue', text: `Monthly revenue ${revChange >= 0 ? 'increased' : 'decreased'} ${Math.abs(revChange)}% compared with the previous month.` },
-      { tone: 'amber', title: 'Memberships', text: `${expiringMembers.length} memberships are likely to expire within the next 30 days, around GH₵${atRisk.toLocaleString('en-GH')} in monthly fees.` },
-      { tone: 'blue', title: 'Facility demand', text: `${dayNames[d.best.day]} ${timeSlots[d.best.slot]} has the highest booking demand. ${busiestFacility.name} is the most utilized facility at ${busiestFacility.utilization}%.` },
-      { tone: 'red', title: 'Retention', text: `${decliners} athletes show declining attendance. Review them in the attention list below.` },
-    ],
-    attention,
+    athleteGrowth: growth, revenueByMonth: revenue, membershipBreakdown, sportCounts, facilityUse,
+    teamPerformance: await teamPerformance(d.teams),
+    heatmap: dm, insights, attention, pendingPayments: payments.filter((p) => p.status === 'Pending'),
   }
 }
 
 // ---------- Reports ----------
+function ageOf(dob) {
+  return dob ? Math.floor((new Date(TODAY_ISO) - new Date(dob)) / (365.25 * 86400000)) : ''
+}
+
 export async function getReports() {
-  await delay(500)
-  const { profiles, members, records } = collect()
-  const paid = initialPayments.filter((p) => p.status === 'Paid')
+  const d = await collect()
+  const paid = d.payments.filter((p) => p.status === 'Paid')
   const sum = (list) => list.reduce((s, p) => s + p.amount, 0)
-  const byType = (t) => sum(paid.filter((p) => p.type === t))
-  const money = (v) => `GH₵${v.toLocaleString('en-GH')}`
-  const male = mockAthletes.filter((a) => a.gender === 'Male').length
+  const male = d.directory.filter((a) => a.gender === 'Male').length
+  const ages = d.directory.map((a) => a.age).filter((a) => a != null)
+  const memberByAthlete = new Map()
+  d.members.forEach((m) => { if (!memberByAthlete.has(m.athleteId)) memberByAthlete.set(m.athleteId, m.state.key) })
 
   const athlete = {
     key: 'athlete', title: 'Athlete report', description: 'Roster, demographics and membership status.',
     summary: [
-      { label: 'Total athletes', value: mockAthletes.length },
-      { label: 'Male / Female', value: `${male} / ${mockAthletes.length - male}` },
-      { label: 'Average age', value: (mockAthletes.reduce((s, a) => s + age(a.dateOfBirth), 0) / mockAthletes.length).toFixed(1) },
-      { label: 'Sports', value: new Set(mockAthletes.map((a) => a.sport)).size },
+      { label: 'Total athletes', value: d.directory.length },
+      { label: 'Male / Female', value: `${male} / ${d.directory.filter((a) => a.gender === 'Female').length}` },
+      { label: 'Average age', value: ages.length ? (ages.reduce((s, a) => s + a, 0) / ages.length).toFixed(1) : '—' },
+      { label: 'Sports', value: new Set(d.directory.map((a) => a.sport).filter(Boolean)).size },
     ],
     columns: ['Athlete ID', 'Name', 'Sport', 'Team', 'Position', 'Gender', 'Age', 'Membership'],
-    rows: members.map((m) => {
-      const a = m.athlete
-      return [`A-${String(a.athleteId).padStart(4, '0')}`, `${a.firstName} ${a.lastName}`, a.sport, mockTeams.find((t) => t.teamId === a.teamId)?.teamName || '', a.position, a.gender, age(a.dateOfBirth), m.state.key]
-    }),
+    rows: d.directory.map((a) => [`A-${String(a.athleteId).padStart(4, '0')}`, a.name, a.sport || '', a.team || '', a.position || '', a.gender || '', a.age ?? ageOf(a.dateOfBirth), memberByAthlete.get(a.athleteId) || a.membership || 'None']),
   }
 
   const financial = {
-    key: 'financial', title: 'Financial report', description: 'Revenue by source, outstanding balances and every transaction.',
+    key: 'financial', title: 'Financial report', description: 'Revenue, outstanding balances and every transaction.',
     summary: [
       { label: 'Revenue collected', value: money(sum(paid)) },
-      { label: 'Membership income', value: money(byType('Membership')) },
-      { label: 'Facility income', value: money(byType('Facility booking')) },
-      { label: 'Outstanding', value: money(sum(initialPayments.filter((p) => p.status === 'Pending'))) },
+      { label: 'Membership income', value: money(sum(paid.filter((p) => p.type === 'Membership'))) },
+      { label: 'Facility income', value: money(sum(paid.filter((p) => p.type === 'Facility booking'))) },
+      { label: 'Outstanding', value: money(sum(d.payments.filter((p) => p.status === 'Pending'))) },
     ],
     columns: ['ID', 'Date', 'Member', 'Type', 'Method', 'Amount (GHS)', 'Status'],
-    rows: initialPayments.map((p) => [p.id, p.date, p.member, p.type, p.method, p.amount, p.status]),
+    rows: d.payments.map((p) => [p.id, p.date, p.member, p.type, p.method, p.amount, p.status]),
   }
 
-  const teamRows = mockTeams.map((t) => {
-    const roster = profiles.filter((p) => p.teamId === t.teamId)
-    const r = records[t.teamName] || { played: 0, won: 0, drawn: 0, lost: 0, points: 0 }
-    const avg = (f) => (roster.length ? Math.round(roster.reduce((s, p) => s + f(p), 0) / roster.length) : 0)
-    return [t.teamName, t.sport, roster.length, r.played, r.won, r.drawn, r.lost, r.points, `${avg((p) => p.attendance.rate)}%`, avg((p) => p.performance.trend.at(-1).score)]
-  })
+  const tp = await teamPerformance(d.teams)
   const performance = {
-    key: 'performance', title: 'Performance report', description: 'Team results, attendance and performance scores.',
+    key: 'performance', title: 'Performance report', description: USE_MOCKS ? 'Team results and standings.' : 'Team competition entries and final positions. Match results and attendance are not tracked yet.',
     summary: [
-      { label: 'Teams', value: mockTeams.length },
-      { label: 'Matches played', value: Object.values(records).reduce((s, r) => s + r.played, 0) / 2 },
-      { label: 'Average attendance', value: `${Math.round(profiles.reduce((s, p) => s + p.attendance.rate, 0) / profiles.length)}%` },
-      { label: 'Average score', value: Math.round(profiles.reduce((s, p) => s + p.performance.trend.at(-1).score, 0) / profiles.length) },
+      { label: 'Teams', value: d.teams.length },
+      { label: 'Teams with results', value: tp.rows.length },
+      { label: 'Competitions', value: (await getCompetitions()).length },
+      { label: 'Athletes on a team', value: d.directory.filter((a) => a.team).length },
     ],
-    columns: ['Team', 'Sport', 'Athletes', 'Played', 'Won', 'Drawn', 'Lost', 'Points', 'Avg attendance', 'Avg score'],
-    rows: teamRows,
+    columns: tp.columns, rows: tp.rows,
   }
 
   const facility = {
     key: 'facility', title: 'Facility report', description: 'Usage, booking frequency and status per facility.',
     summary: [
-      { label: 'Facilities', value: initialFacilities.length },
-      { label: 'Bookings this week', value: initialBookings.length },
-      { label: 'Pending approval', value: initialBookings.filter((b) => b.status === 'Pending').length },
-      { label: 'Average utilization', value: `${Math.round(initialFacilities.reduce((s, f) => s + f.utilization, 0) / initialFacilities.length)}%` },
+      { label: 'Facilities', value: d.facilities.length },
+      { label: 'Bookings', value: d.bookings.length },
+      { label: 'Pending approval', value: d.bookings.filter((b) => b.status === 'Pending').length },
+      { label: 'Average utilization', value: d.facilities.length ? `${Math.round(d.facilities.reduce((s, f) => s + f.utilization, 0) / d.facilities.length)}%` : '—' },
     ],
     columns: ['Facility', 'Type', 'Capacity', 'Status', 'Utilization', 'Bookings', 'Pending'],
-    rows: initialFacilities.map((f) => {
-      const list = initialBookings.filter((b) => b.facilityId === f.id)
+    rows: d.facilities.map((f) => {
+      const list = d.bookings.filter((b) => b.facilityId === f.id)
       return [f.name, f.type, f.capacity, f.status, `${f.utilization}%`, list.length, list.filter((b) => b.status === 'Pending').length]
     }),
   }
-
   return [athlete, financial, performance, facility]
 }

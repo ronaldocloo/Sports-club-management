@@ -1,10 +1,15 @@
-import { createContext, useContext, useMemo, useState } from 'react'
-import { notifications as seed } from '../../mocks/demoData'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { getNotifications } from '../../api/operations'
 
 const Ctx = createContext(null)
 
 export function NotificationsProvider({ children }) {
-  const [items, setItems] = useState(seed)
+  const [items, setItems] = useState([])
+
+  useEffect(() => {
+    getNotifications().then(setItems).catch(() => setItems([]))
+  }, [])
+
   const value = useMemo(() => ({
     items,
     unread: items.filter((n) => n.unread).length,

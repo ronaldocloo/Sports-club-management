@@ -1,43 +1,31 @@
 import apiClient, { USE_MOCKS } from './client'
+import { invalidate, loadAll } from './raw'
+import { competitionDetailOf, competitionsOf } from './realData'
 import { mockCompetitions } from '../mocks/mockData'
 import { competitionDetails } from '../mocks/competitionData'
-
-// The backend uses compName/compDate/venue; the UI uses competitionName/date/location.
-function normalize(c) {
-  if (!c || c.competitionName) return c
-  return { ...c, competitionName: c.compName, date: c.compDate, location: c.venue }
-}
 
 // Demo mode only: competitions added this session.
 const sessionCompetitions = []
 
 export async function getCompetitions() {
-  if (USE_MOCKS) {
-    return [...sessionCompetitions, ...mockCompetitions]
-  }
-  const response = await apiClient.get('/competitions')
-  return response.data.map(normalize)
+  if (USE_MOCKS) return [...sessionCompetitions, ...mockCompetitions]
+  return competitionsOf(await loadAll())
 }
 
 export async function getCompetitionById(competitionId) {
-  if (USE_MOCKS) {
-    return [...sessionCompetitions, ...mockCompetitions].find(
-      (competition) => competition.competitionId === Number(competitionId),
-    )
-  }
-  const response = await apiClient.get(`/competitions/${competitionId}`)
-  return normalize(response.data)
+  return (await getCompetitions()).find((c) => c.competitionId === Number(competitionId))
 }
 
-// Competition plus fixtures/teams. Fixtures are mock data until the backend has a match API.
+// Competition plus teams/fixtures. Fixtures and results are demo data only: the backend has
+// no match table, so real competitions show entries (team, final position, points) instead.
 export async function getCompetitionDetail(competitionId) {
+  if (!USE_MOCKS) return competitionDetailOf(await loadAll(), competitionId)
   const competition = await getCompetitionById(competitionId)
   if (!competition) return null
   const extra = competitionDetails[competition.competitionId] || { teams: [], fixtures: [], level: competition.level }
-  return { ...competition, ...extra }
+  return { ...competition, ...extra, fixturesAvailable: true }
 }
 
-// Demo mode keeps new competitions in memory only. With the real API this POSTs to /competitions.
 export async function createCompetition(data) {
   if (USE_MOCKS) {
     await new Promise((r) => setTimeout(r, 500))
@@ -45,9 +33,9 @@ export async function createCompetition(data) {
     sessionCompetitions.unshift(competition)
     return competition
   }
-  const response = await apiClient.post('/competitions', {
-    compName: data.name, compDate: data.date, venue: data.venue, level: data.level,
-    registrationDeadline: data.registrationDeadline || null,
+  const { data: c } = await apiClient.post('/competitions', {
+    compName: data.name, compDate: data.date, venue: data.venue, level: data.level, registrationDeadline: data.registrationDeadline || null,
   })
-  return normalize(response.data)
+  invalidate()
+  return { competitionId: c.competitionId, competitionName: c.compName, date: c.compDate, location: c.venue, status: 'Upcoming', level: c.level }
 }

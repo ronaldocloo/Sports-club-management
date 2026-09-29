@@ -27,7 +27,7 @@ function TeamsPage() {
   useEffect(() => { load(); }, [load]);
 
   async function handleCreate(values) {
-    const created = await createTeam({ name: values.name, sport: values.sport, coachName: values.coachName });
+    const created = await createTeam(values);
     setTeams((list) => [created, ...list]);
     push("Team created");
   }

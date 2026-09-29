@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, UserCheck, Users, UserX } from 'lucide-react'
-import { createAthlete, getAthleteDirectory } from '../api/athletes'
+import { assignTeam as assignTeamApi, createAthlete, getAthleteDirectory, setAthleteActive, updateAthlete } from '../api/athletes'
+import { errorMessage } from '../api/client'
+import { getSports } from '../api/sports'
 import { getTeams } from '../api/teams'
 import { useAuth } from '../context/AuthContext'
 import { normalizeRole } from '../utils/permissions'
@@ -9,17 +11,17 @@ import { Avatar, Badge, Button, Card, CardSkeleton, ConfirmDialog, EmptyState, E
 import AthleteForm from '../components/athletes/AthleteForm'
 
 const PAGE_SIZE = 12
-const memTone = { Active: 'green', Expiring: 'amber', Expired: 'red', Pending: 'gray' }
-const sports = ['All', 'Football', 'Basketball', 'Athletics', 'Volleyball', 'Swimming', 'Badminton']
+const memTone = { Active: 'green', Expiring: 'amber', Expired: 'red', Pending: 'gray', Suspended: 'gray' }
 
 async function load() {
-  const [athletes, teams] = await Promise.all([getAthleteDirectory(), getTeams().catch(() => [])])
-  return { athletes, teams }
+  const [athletes, teams, sports] = await Promise.all([getAthleteDirectory(), getTeams().catch(() => []), getSports().catch(() => [])])
+  return { athletes, teams, sports: sports.map((s) => s.name) }
 }
 
 function AthletesPage() {
   const [rows, setRows] = useState([])
   const [teams, setTeams] = useState([])
+  const [sportNames, setSportNames] = useState([])
   const [status, setStatus] = useState('loading')
   const [params, setParams] = useSearchParams()
   const [search, setSearch] = useState('')
@@ -36,10 +38,11 @@ function AthletesPage() {
   const canWrite = role === 'Admin' || role === 'SuperAdmin' || role === 'FrontDesk'
   const canDelete = role === 'Admin' || role === 'SuperAdmin'
   const sport = params.get('sport') || 'All'
+  const sportFilter = ['All', ...sportNames]
 
   const reload = useCallback(() => {
     setStatus('loading')
-    load().then((d) => { setRows(d.athletes); setTeams(d.teams); setStatus('ready') }).catch(() => setStatus('error'))
+    load().then((d) => { setRows(d.athletes); setTeams(d.teams); setSportNames(d.sports); setStatus('ready') }).catch(() => setStatus('error'))
   }, [])
   useEffect(() => { reload() }, [reload])
   useEffect(() => { setPage(1) }, [search, sport, membership])
@@ -52,29 +55,43 @@ function AthletesPage() {
   const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const active = rows.filter((r) => r.status === 'Active').length
 
+  // The form shows its own error message if this throws.
   async function save(values) {
     if (form.athlete) {
-      setRows((l) => l.map((r) => (r.athleteId === form.athlete.athleteId ? { ...r, ...values, name: `${values.firstName} ${values.lastName}`, team: values.team } : r)))
+      const updated = await updateAthlete(form.athlete, values)
+      setRows((l) => l.map((r) => (r.athleteId === updated.athleteId ? { ...r, ...updated } : r)))
       push('Athlete updated')
     } else {
       const created = await createAthlete(values)
-      setRows((l) => [{ ...created, team: values.team, teamId: values.teamId, sport: values.sport, position: values.position }, ...l])
-      push(`${created.name} added`)
+      setRows((l) => [{ ...created, team: created.rosterError ? null : created.team ?? values.team, teamId: created.rosterError ? null : created.teamId ?? values.teamId, sport: values.sport, position: values.position }, ...l])
+      if (created.rosterError) push(`${created.name} added, but the team assignment failed: ${errorMessage(created.rosterError)}`, 'error')
+      else push(`${created.name} added`)
     }
   }
 
-  function confirmAssign() {
+  async function confirmAssign() {
     const t = teams.find((x) => String(x.teamId) === assignTeam)
     if (!t) return
-    setRows((l) => l.map((r) => (r.athleteId === assign.athleteId ? { ...r, team: t.teamName, teamId: t.teamId } : r)))
-    push(`${assign.name} assigned to ${t.teamName}`)
+    try {
+      const updated = await assignTeamApi(assign, t)
+      setRows((l) => l.map((r) => (r.athleteId === updated.athleteId ? { ...r, ...updated } : r)))
+      push(`${assign.name} assigned to ${t.teamName}`)
+    } catch (e) {
+      push(errorMessage(e), 'error')
+    }
     setAssign(null); setAssignTeam('')
   }
 
-  function confirmToggle() {
-    setRows((l) => l.map((r) => (r.athleteId === toggle.athleteId ? { ...r, status: r.status === 'Active' ? 'Inactive' : 'Active' } : r)))
-    push(`${toggle.name} ${toggle.status === 'Active' ? 'deactivated' : 'reactivated'}`)
+  async function confirmToggle() {
+    const target = toggle
     setToggle(null)
+    try {
+      const updated = await setAthleteActive(target, target.status !== 'Active')
+      setRows((l) => l.map((r) => (r.athleteId === updated.athleteId ? { ...r, ...updated } : r)))
+      push(`${target.name} ${target.status === 'Active' ? 'deactivated' : 'reactivated'}`)
+    } catch (e) {
+      push(errorMessage(e), 'error')
+    }
   }
 
   return (
@@ -97,10 +114,10 @@ function AthletesPage() {
             <div className="flex flex-col gap-3 border-b border-gray-100 p-4 md:flex-row md:items-center">
               <SearchInput value={search} onChange={setSearch} placeholder="Search by name, team, position or ID" label="Search athletes" />
               <select value={sport} onChange={(e) => setParams(e.target.value === 'All' ? {} : { sport: e.target.value })} aria-label="Filter by sport" className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
-                {sports.map((s) => <option key={s} value={s}>{s === 'All' ? 'All sports' : s}</option>)}
+                {sportFilter.map((s) => <option key={s} value={s}>{s === 'All' ? 'All sports' : s}</option>)}
               </select>
               <select value={membership} onChange={(e) => setMembership(e.target.value)} aria-label="Filter by membership" className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
-                {['All', 'Active', 'Expiring', 'Expired', 'Pending'].map((s) => <option key={s} value={s}>{s === 'All' ? 'Any membership' : s}</option>)}
+                {['All', 'Active', 'Expiring', 'Expired', 'Pending', 'Suspended'].map((s) => <option key={s} value={s}>{s === 'All' ? 'Any membership' : s}</option>)}
               </select>
             </div>
 
@@ -130,7 +147,7 @@ function AthletesPage() {
                             { label: 'View profile', onClick: () => navigate(`/athletes/${r.athleteId}`) },
                             { label: 'Edit', hidden: !canWrite, onClick: () => setForm({ open: true, athlete: r }) },
                             { label: 'Assign team', hidden: !canWrite, onClick: () => { setAssign(r); setAssignTeam('') } },
-                            { label: r.status === 'Active' ? 'Deactivate' : 'Reactivate', hidden: !canDelete, danger: r.status === 'Active', onClick: () => setToggle(r) },
+                            { label: r.status === 'Active' ? 'Deactivate' : 'Reactivate', hidden: !canDelete || r.hasRoster === false, danger: r.status === 'Active', onClick: () => setToggle(r) },
                           ]} />
                         </td>
                       </tr>
@@ -144,7 +161,7 @@ function AthletesPage() {
         </>
       )}
 
-      <AthleteForm open={form.open} athlete={form.athlete} teams={teams} onClose={() => setForm({ open: false, athlete: null })} onSubmit={save} />
+      <AthleteForm open={form.open} athlete={form.athlete} teams={teams} sports={sportNames} onClose={() => setForm({ open: false, athlete: null })} onSubmit={save} />
 
       <Modal open={!!assign} onClose={() => setAssign(null)} title="Assign team"
         footer={<><Button variant="secondary" onClick={() => setAssign(null)}>Cancel</Button><Button onClick={confirmAssign} disabled={!assignTeam}>Assign</Button></>}>

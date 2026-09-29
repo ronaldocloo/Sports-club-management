@@ -1,51 +1,71 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, Minus, Plus, UserRound } from 'lucide-react'
-import { initialUsers } from '../mocks/usersData'
+import { createUser, getUsers } from '../api/operations'
+import { getCoaches } from '../api/coaches'
+import { errorMessage, USE_MOCKS } from '../api/client'
 import { ROLE_LABELS, moduleList, roleAccess } from '../utils/permissions'
 import useAsync from '../hooks/useAsync'
 import { Avatar, Badge, Button, Card, CardHeader, ConfirmDialog, EmptyState, ErrorState, Input, Modal, PageHeader, SearchInput, Select, TableSkeleton, useToast } from '../components/ui'
 import { formatDate } from '../utils/format'
 
 const roleTone = { SuperAdmin: 'red', Admin: 'blue', Coach: 'green', FrontDesk: 'amber', Athlete: 'gray' }
-const delay = (ms) => new Promise((r) => setTimeout(r, ms))
-// Demo data; replace with GET /api/users once wired to the backend.
-const loadUsers = async () => { await delay(450); return initialUsers.map((u) => ({ ...u })) }
+const REAL_ROLES = ['Admin', 'Coach', 'FrontDesk']
 
 function UserModal({ open, onClose, onSave }) {
-  const empty = { name: '', username: '', email: '', role: '' }
+  const empty = { name: '', username: '', email: '', password: '', role: '', coachId: '' }
   const [v, setV] = useState(empty)
   const [errors, setErrors] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [coaches, setCoaches] = useState([])
   const set = (k) => (e) => setV((s) => ({ ...s, [k]: e.target.value }))
   const close = () => { setV(empty); setErrors({}); onClose() }
+  const roles = USE_MOCKS ? Object.keys(ROLE_LABELS) : REAL_ROLES
 
-  function submit(e) {
+  useEffect(() => {
+    if (open && !USE_MOCKS) getCoaches().then(setCoaches).catch(() => setCoaches([]))
+  }, [open])
+
+  async function submit(e) {
     e.preventDefault()
     const err = {}
-    if (!v.name.trim()) err.name = 'Full name is required.'
+    if (USE_MOCKS && !v.name.trim()) err.name = 'Full name is required.'
     if (!/^[a-z0-9._-]{3,}$/i.test(v.username)) err.username = 'Use at least 3 letters, numbers, dots or dashes.'
-    if (!/^\S+@\S+\.\S+$/.test(v.email)) err.email = 'Enter a valid email address.'
+    if (USE_MOCKS && !/^\S+@\S+\.\S+$/.test(v.email)) err.email = 'Enter a valid email address.'
+    if (!USE_MOCKS && v.password.length < 8) err.password = 'Use at least 8 characters.'
     if (!v.role) err.role = 'Select a role.'
     setErrors(err)
     if (Object.keys(err).length) return
-    onSave(v)
-    setV(empty)
+    setSaving(true)
+    try {
+      await onSave(v)
+      close()
+    } catch (e2) {
+      setErrors({ submit: errorMessage(e2, "We couldn't create this user.") })
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <Modal open={open} onClose={close} title="Add user"
-      footer={<><Button variant="secondary" onClick={close}>Cancel</Button><Button type="submit" form="user-form">Add User</Button></>}>
+      footer={<><Button variant="secondary" onClick={close}>Cancel</Button><Button type="submit" form="user-form" loading={saving}>Add User</Button></>}>
       <form id="user-form" onSubmit={submit} noValidate className="grid gap-4 sm:grid-cols-2">
-        <Input label="Full name" required value={v.name} onChange={set('name')} error={errors.name} />
-        <Input label="Username" required value={v.username} onChange={set('username')} error={errors.username} />
-        <div className="sm:col-span-2"><Input label="Email" required type="email" value={v.email} onChange={set('email')} error={errors.email} /></div>
-        <div className="sm:col-span-2"><Select label="Role" required options={Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))} placeholder="Select role" value={v.role} onChange={set('role')} error={errors.role} /></div>
+        {USE_MOCKS && <Input label="Full name" required value={v.name} onChange={set('name')} error={errors.name} />}
+        <Input label="Username" required value={v.username} onChange={set('username')} error={errors.username} autoComplete="off" />
+        {USE_MOCKS && <div className="sm:col-span-2"><Input label="Email" required type="email" value={v.email} onChange={set('email')} error={errors.email} /></div>}
+        {!USE_MOCKS && <div className="sm:col-span-2"><Input label="Password" required type="password" value={v.password} onChange={set('password')} error={errors.password} hint="At least 8 characters. Share it with the user securely." autoComplete="new-password" /></div>}
+        <div className="sm:col-span-2"><Select label="Role" required options={roles.map((value) => ({ value, label: ROLE_LABELS[value] }))} placeholder="Select role" value={v.role} onChange={set('role')} error={errors.role} /></div>
+        {!USE_MOCKS && v.role === 'Coach' && (
+          <div className="sm:col-span-2"><Select label="Coach record" options={coaches.map((c) => ({ value: String(c.coachId), label: `${c.firstName} ${c.lastName}` }))} placeholder="Link to a coach" value={v.coachId} onChange={set('coachId')} /></div>
+        )}
+        {errors.submit && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-2">{errors.submit}</p>}
       </form>
     </Modal>
   )
 }
 
 function UsersPage() {
-  const { data, setData, status, reload } = useAsync(loadUsers)
+  const { data, setData, status, reload } = useAsync(getUsers)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [toggle, setToggle] = useState(null)
@@ -53,8 +73,9 @@ function UsersPage() {
 
   const users = useMemo(() => (data || []).filter((u) => `${u.name} ${u.username} ${u.email}`.toLowerCase().includes(search.toLowerCase().trim())), [data, search])
 
-  function add(v) {
-    setData((l) => [{ id: Date.now(), ...v, active: true, lastLogin: null }, ...l])
+  async function add(v) {
+    const created = await createUser(v)
+    setData((l) => [created, ...l])
     setOpen(false)
     push(`User ${v.username} added`)
   }
@@ -67,7 +88,7 @@ function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="System" title="Users" description="Accounts, roles and access for your organization."
+      <PageHeader eyebrow="System" title="Users" description={USE_MOCKS ? 'Accounts, roles and access for your organization.' : 'Accounts, roles and access for your organization. Deactivating users needs a backend change (the update endpoint requires a new password).'}
         actions={<Button icon={Plus} onClick={() => setOpen(true)}>Add User</Button>} />
 
       {status === 'loading' && <TableSkeleton />}
@@ -88,11 +109,11 @@ function UsersPage() {
                   <tbody className="divide-y divide-gray-100">
                     {users.map((u) => (
                       <tr key={u.id} className="hover:bg-gray-50">
-                        <td className="px-5 py-3"><div className="flex items-center gap-3"><Avatar name={u.name} /><div><p className="font-medium text-gray-900">{u.name}</p><p className="text-xs text-gray-500">{u.username} · {u.email}</p></div></div></td>
+                        <td className="px-5 py-3"><div className="flex items-center gap-3"><Avatar name={u.name} /><div><p className="font-medium text-gray-900">{u.name}</p><p className="text-xs text-gray-500">{[u.username !== u.name && u.username, u.email].filter(Boolean).join(' · ') || 'Signs in with username'}</p></div></div></td>
                         <td className="px-5 py-3"><Badge tone={roleTone[u.role]}>{ROLE_LABELS[u.role]}</Badge></td>
                         <td className="px-5 py-3"><Badge tone={u.active ? 'green' : 'gray'}>{u.active ? 'Active' : 'Inactive'}</Badge></td>
                         <td className="px-5 py-3 text-gray-700">{u.lastLogin ? formatDate(u.lastLogin) : 'Never'}</td>
-                        <td className="px-5 py-3 text-right"><Button size="sm" variant="secondary" onClick={() => setToggle(u)}>{u.active ? 'Deactivate' : 'Reactivate'}</Button></td>
+                        <td className="px-5 py-3 text-right">{USE_MOCKS && <Button size="sm" variant="secondary" onClick={() => setToggle(u)}>{u.active ? 'Deactivate' : 'Reactivate'}</Button>}</td>
                       </tr>
                     ))}
                   </tbody>

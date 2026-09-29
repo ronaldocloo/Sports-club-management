@@ -3,37 +3,42 @@ import { Link } from 'react-router-dom'
 import { Layers, Plus, Shield, UserCog, Users } from 'lucide-react'
 import { getAthletes } from '../api/athletes'
 import { getTeams } from '../api/teams'
-import { mockCoaches } from '../mocks/coachData'
-import { sports as seedSports } from '../mocks/demoData'
+import { getCoaches } from '../api/coaches'
+import { createSport, getSports } from '../api/sports'
+import { errorMessage } from '../api/client'
 import useAsync from '../hooks/useAsync'
 import { Button, Card, CardSkeleton, EmptyState, ErrorState, Input, Modal, PageHeader, StatCard, useToast } from '../components/ui'
 
 async function load() {
-  const [athletes, teams] = await Promise.all([getAthletes(), getTeams()])
-  return { athletes, teams }
+  const [athletes, teams, sports, coaches] = await Promise.all([getAthletes(), getTeams(), getSports(), getCoaches().catch(() => [])])
+  return { athletes, teams, sports, coaches }
 }
 
 function SportsPage() {
   const { data, status, reload } = useAsync(load)
-  const [extra, setExtra] = useState([])
+  const [sports, setSports] = useState([])
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const { push } = useToast()
 
-  useEffect(() => { setExtra([]) }, [data])
+  useEffect(() => { if (data) setSports(data.sports) }, [data])
 
-  const sports = [...seedSports, ...extra]
   const count = (list, sport) => (list || []).filter((x) => x.sport === sport).length
 
-  function add(e) {
+  async function add(e) {
     e.preventDefault()
     const n = name.trim()
     if (!n) return setError('Sport name is required.')
     if (sports.some((s) => s.name.toLowerCase() === n.toLowerCase())) return setError('That sport already exists.')
-    setExtra((l) => [...l, { id: Date.now(), name: n, color: '#64748b' }])
-    setOpen(false); setName(''); setError('')
-    push(`Sport “${n}” added`)
+    try {
+      const created = await createSport(n)
+      setSports((l) => [...l, created])
+      setOpen(false); setName(''); setError('')
+      push(`Sport “${n}” added`)
+    } catch (err) {
+      setError(errorMessage(err))
+    }
   }
 
   return (
@@ -65,7 +70,7 @@ function SportsPage() {
                   <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
                     <div><dt className="flex items-center justify-center gap-1 text-xs text-gray-500"><Users size={12} /> Athletes</dt><dd className="mt-1 text-xl font-bold text-gray-900">{count(data.athletes, s.name)}</dd></div>
                     <div><dt className="flex items-center justify-center gap-1 text-xs text-gray-500"><Shield size={12} /> Teams</dt><dd className="mt-1 text-xl font-bold text-gray-900">{count(data.teams, s.name)}</dd></div>
-                    <div><dt className="flex items-center justify-center gap-1 text-xs text-gray-500"><UserCog size={12} /> Coaches</dt><dd className="mt-1 text-xl font-bold text-gray-900">{count(mockCoaches, s.name)}</dd></div>
+                    <div><dt className="flex items-center justify-center gap-1 text-xs text-gray-500"><UserCog size={12} /> Coaches</dt><dd className="mt-1 text-xl font-bold text-gray-900">{count(data.coaches.map((c) => ({ sport: c.specialization || c.sport })), s.name)}</dd></div>
                   </dl>
                   <Link to={`/athletes?sport=${encodeURIComponent(s.name)}`} className="mt-4 inline-block text-sm font-medium text-blue-600 hover:text-blue-700">View athletes →</Link>
                 </Card>

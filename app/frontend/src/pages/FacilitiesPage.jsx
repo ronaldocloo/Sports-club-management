@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Building2, CalendarCheck, Dumbbell, Gauge, Plus, Trophy, Users, Waves, Wrench } from 'lucide-react'
-import { getBookings, getFacilities } from '../api/operations'
+import { createFacility, facilityTypes, getBookings, getFacilities, setFacilityStatus } from '../api/operations'
+import { errorMessage } from '../api/client'
 import useAsync from '../hooks/useAsync'
 import { Badge, Button, Card, CardSkeleton, ConfirmDialog, EmptyState, ErrorState, Input, Modal, PageHeader, Select, StatCard, useToast } from '../components/ui'
 
-const facilityTypes = ['Football pitch', 'Basketball court', 'Swimming pool', 'Gym', 'Tennis court', 'Meeting room', 'Training facility']
-const typeIcon = { 'Swimming pool': Waves, Gym: Dumbbell, 'Meeting room': Users, 'Football pitch': Trophy }
-const statusTone = { Available: 'green', Maintenance: 'amber' }
+const typeIcon = { 'Swimming pool': Waves, Pool: Waves, Gym: Dumbbell, 'Meeting room': Users, Hall: Users, 'Football pitch': Trophy, Field: Trophy, Track: Trophy }
+const statusTone = { Available: 'green', Maintenance: 'amber', Closed: 'gray' }
 
 function FacilityModal({ open, onClose, onSave }) {
-  const empty = { name: '', type: '', capacity: '' }
+  const empty = { name: '', type: '', capacity: '', location: '' }
   const [v, setV] = useState(empty)
   const [errors, setErrors] = useState({})
   const set = (k) => (e) => setV((s) => ({ ...s, [k]: e.target.value }))
@@ -24,7 +24,7 @@ function FacilityModal({ open, onClose, onSave }) {
     if (!v.capacity || Number(v.capacity) <= 0) err.capacity = 'Enter a capacity greater than 0.'
     setErrors(err)
     if (Object.keys(err).length) return
-    onSave({ name: v.name.trim(), type: v.type, capacity: Number(v.capacity) })
+    onSave({ name: v.name.trim(), type: v.type, capacity: Number(v.capacity), location: v.location.trim() })
     setV(empty)
   }
 
@@ -35,6 +35,7 @@ function FacilityModal({ open, onClose, onSave }) {
         <Input label="Name" required value={v.name} onChange={set('name')} error={errors.name} />
         <Select label="Type" required options={facilityTypes} placeholder="Select type" value={v.type} onChange={set('type')} error={errors.type} />
         <Input label="Capacity" required type="number" min="1" value={v.capacity} onChange={set('capacity')} error={errors.capacity} />
+        <Input label="Location" value={v.location} onChange={set('location')} />
       </form>
     </Modal>
   )
@@ -56,17 +57,28 @@ function FacilitiesPage() {
   const avg = list.length ? Math.round(list.reduce((s, f) => s + f.utilization, 0) / list.length) : 0
   const most = [...list].sort((a, b) => b.utilization - a.utilization)[0]
 
-  function add(f) {
-    setList((l) => [...l, { id: Date.now(), status: 'Available', utilization: 0, ...f }])
-    setAddOpen(false)
-    push(`${f.name} added`)
+  async function add(f) {
+    try {
+      const created = await createFacility(f)
+      setList((l) => [...l, created])
+      setAddOpen(false)
+      push(`${f.name} added`)
+    } catch (e) {
+      push(errorMessage(e), 'error')
+    }
   }
 
-  function confirmToggle() {
-    const next = toggle.status === 'Maintenance' ? 'Available' : 'Maintenance'
-    setList((l) => l.map((f) => (f.id === toggle.id ? { ...f, status: next } : f)))
-    push(`${toggle.name} set to ${next.toLowerCase()}`)
+  async function confirmToggle() {
+    const target = toggle
+    const next = target.status === 'Available' ? 'Maintenance' : 'Available'
     setToggle(null)
+    try {
+      const updated = await setFacilityStatus(target, next)
+      setList((l) => l.map((f) => (f.id === updated.id ? { ...f, ...updated } : f)))
+      push(`${target.name} set to ${next.toLowerCase()}`)
+    } catch (e) {
+      push(errorMessage(e), 'error')
+    }
   }
 
   const loading = fac.status === 'loading'
@@ -103,7 +115,7 @@ function FacilitiesPage() {
                       <Badge tone={statusTone[f.status] || 'gray'}>{f.status}</Badge>
                     </div>
                     <h3 className="mt-4 text-base font-semibold text-gray-900">{f.name}</h3>
-                    <p className="text-sm text-gray-500">{f.type} · Capacity {f.capacity}</p>
+                    <p className="text-sm text-gray-500">{f.type} · Capacity {f.capacity}{f.location ? ` · ${f.location}` : ''}</p>
                     <div className="mt-4">
                       <div className="mb-1 flex justify-between text-xs text-gray-500"><span>Utilization</span><span className="font-semibold text-gray-900">{f.utilization}%</span></div>
                       <div className="h-2 rounded-full bg-gray-100"><div className={`h-2 rounded-full ${bar}`} style={{ width: `${f.utilization}%` }} /></div>
@@ -111,7 +123,7 @@ function FacilitiesPage() {
                     <p className="mt-3 text-xs text-gray-500">{book.status === 'ready' ? `${weekCount(f.id)} bookings this week` : ' '}</p>
                     <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
                       <Link to={`/bookings?facility=${f.id}`} className="text-sm font-medium text-blue-600 hover:text-blue-700">View bookings</Link>
-                      <Button size="sm" variant="secondary" onClick={() => setToggle(f)}>{f.status === 'Maintenance' ? 'Mark available' : 'Set maintenance'}</Button>
+                      <Button size="sm" variant="secondary" onClick={() => setToggle(f)}>{f.status === 'Available' ? 'Set maintenance' : 'Mark available'}</Button>
                     </div>
                   </Card>
                 )
@@ -124,8 +136,8 @@ function FacilitiesPage() {
       <FacilityModal open={addOpen} onClose={() => setAddOpen(false)} onSave={add} />
       <ConfirmDialog
         open={!!toggle}
-        title={toggle?.status === 'Maintenance' ? 'Mark facility available?' : 'Set facility to maintenance?'}
-        description={toggle?.status === 'Maintenance' ? `${toggle?.name} will become bookable again.` : `${toggle?.name} will be unavailable for new bookings until it is marked available.`}
+        title={toggle?.status !== 'Available' ? 'Mark facility available?' : 'Set facility to maintenance?'}
+        description={toggle?.status !== 'Available' ? `${toggle?.name} will become bookable again.` : `${toggle?.name} will be unavailable for new bookings until it is marked available.`}
         confirmLabel="Confirm"
         onConfirm={confirmToggle}
         onCancel={() => setToggle(null)}

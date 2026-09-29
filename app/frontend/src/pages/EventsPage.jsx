@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, Clock, MapPin, Plus, UserRound, Users } from 'lucide-react'
-import { getEvents } from '../api/operations'
+import { eventsAreDerived, getEvents } from '../api/operations'
+import { TODAY_ISO } from '../utils/today'
 import useAsync from '../hooks/useAsync'
 import { Badge, Button, Card, CardSkeleton, EmptyState, ErrorState, Input, Modal, PageHeader, SearchInput, Select, StatCard, TableSkeleton, useToast } from '../components/ui'
 import { formatDate } from '../utils/format'
 
 const eventTypes = ['Training', 'Match', 'Competition', 'Awards', 'Team meeting', 'Workshop', 'Club event']
 const typeTone = { Training: 'blue', Match: 'green', Competition: 'green', Awards: 'amber', 'Team meeting': 'gray', Workshop: 'gray', 'Club event': 'blue' }
-const TODAY = '2026-09-29'
-const WEEK_END = '2026-10-06'
+const TODAY = TODAY_ISO
+const WEEK_END = (() => { const d = new Date(TODAY_ISO); d.setUTCDate(d.getUTCDate() + 7); return d.toISOString().slice(0, 10) })()
 
 function EventModal({ open, onClose, onSave }) {
   const empty = { title: '', type: '', date: '', time: '', location: '', organizer: '' }
@@ -78,8 +79,8 @@ function EventsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Operations" title="Events" description="Training, matches, workshops and club events."
-        actions={<Button icon={Plus} onClick={() => setOpen(true)}>Add Event</Button>} />
+      <PageHeader eyebrow="Operations" title="Events" description={eventsAreDerived ? 'Competitions and confirmed facility bookings, in date order.' : 'Training, matches, workshops and club events.'}
+        actions={!eventsAreDerived && <Button icon={Plus} onClick={() => setOpen(true)}>Add Event</Button>} />
 
       {status === 'loading' && <><div className="grid gap-4 sm:grid-cols-3"><CardSkeleton /><CardSkeleton /><CardSkeleton /></div><TableSkeleton /></>}
       {status === 'error' && <ErrorState title="Couldn't load events" onRetry={reload} />}
@@ -106,7 +107,7 @@ function EventsPage() {
 
           {groups.length === 0 ? (
             <EmptyState icon={CalendarDays} title="No events found" description="There are currently no events matching your filters."
-              action={<Button icon={Plus} onClick={() => setOpen(true)}>Add Event</Button>} />
+              action={!eventsAreDerived && <Button icon={Plus} onClick={() => setOpen(true)}>Add Event</Button>} />
           ) : (
             <div className="space-y-6">
               {groups.map(([date, items]) => (

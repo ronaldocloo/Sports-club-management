@@ -1,21 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AlertCircle, Plus, Receipt, TrendingUp, Wallet } from 'lucide-react'
-import { getPayments } from '../api/operations'
-import { getAthletes } from '../api/athletes'
+import { getMembers, getPayments, getRevenueByMonth, markPaymentPaid, recordPayment } from '../api/operations'
+import { errorMessage, USE_MOCKS } from '../api/client'
+import { TODAY_ISO } from '../utils/today'
 import useAsync from '../hooks/useAsync'
-import { revenueByMonth } from '../mocks/demoData'
 import { Badge, Button, Card, CardHeader, CardSkeleton, EmptyState, ErrorState, Input, Modal, PageHeader, Pagination, SearchInput, Select, StatCard, TableSkeleton, Tabs, useToast } from '../components/ui'
 import { formatDate, formatMoney } from '../utils/format'
 
 const PAGE_SIZE = 10
 const statusTone = { Paid: 'green', Pending: 'amber', Failed: 'red', Refunded: 'gray' }
 const types = ['Membership', 'Competition fee', 'Facility booking', 'Other']
-const methods = ['MTN MoMo', 'Vodafone Cash', 'Card', 'Cash', 'Bank transfer']
-const THIS_MONTH = '2026-09'
+const methods = USE_MOCKS ? ['MTN MoMo', 'Vodafone Cash', 'Card', 'Cash', 'Bank transfer'] : ['Mobile money', 'Card', 'Cash', 'Bank transfer']
+const THIS_MONTH = TODAY_ISO.slice(0, 7)
+
+async function loadPayments() {
+  const [payments, members, revenue] = await Promise.all([getPayments(), getMembers().catch(() => []), getRevenueByMonth()])
+  return { payments, members, revenue }
+}
 
 function RecordPaymentModal({ open, members, onClose, onSave }) {
-  const empty = { member: '', type: '', amount: '', method: '', status: 'Paid' }
+  const empty = { memberId: '', type: USE_MOCKS ? '' : 'Membership', amount: '', method: '', status: 'Paid' }
   const [v, setV] = useState(empty)
   const [errors, setErrors] = useState({})
   const set = (k) => (e) => setV((s) => ({ ...s, [k]: e.target.value }))
@@ -25,13 +30,14 @@ function RecordPaymentModal({ open, members, onClose, onSave }) {
   function submit(e) {
     e.preventDefault()
     const err = {}
-    if (!v.member) err.member = 'Select a member.'
+    if (!v.memberId) err.memberId = 'Select a member.'
     if (!v.type) err.type = 'Select a payment type.'
     if (!v.amount || Number(v.amount) <= 0) err.amount = 'Enter an amount greater than 0.'
     if (!v.method) err.method = 'Select a payment method.'
     setErrors(err)
     if (Object.keys(err).length) return
-    onSave({ ...v, amount: Number(v.amount) })
+    const chosen = members.find((m) => String(m.value) === String(v.memberId))
+    onSave({ ...v, member: chosen?.name, amount: Number(v.amount) })
     setV(empty)
   }
 
@@ -39,8 +45,8 @@ function RecordPaymentModal({ open, members, onClose, onSave }) {
     <Modal open={open} onClose={close} title="Record payment"
       footer={<><Button variant="secondary" onClick={close}>Cancel</Button><Button type="submit" form="payment-form">Save Payment</Button></>}>
       <form id="payment-form" onSubmit={submit} noValidate className="grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2"><Select label="Member" required options={members} placeholder="Select member" value={v.member} onChange={set('member')} error={errors.member} /></div>
-        <Select label="Type" required options={types} placeholder="Select type" value={v.type} onChange={set('type')} error={errors.type} />
+        <div className="sm:col-span-2"><Select label="Member" required options={members.map((m) => ({ value: m.value, label: m.label }))} placeholder="Select member" value={v.memberId} onChange={set('memberId')} error={errors.memberId} /></div>
+        {USE_MOCKS && <Select label="Type" required options={types} placeholder="Select type" value={v.type} onChange={set('type')} error={errors.type} />}
         <Input label="Amount (GH₵)" required type="number" min="0" value={v.amount} onChange={set('amount')} error={errors.amount} />
         <Select label="Method" required options={methods} placeholder="Select method" value={v.method} onChange={set('method')} error={errors.method} />
         <Select label="Status" options={['Paid', 'Pending']} placeholder="Status" value={v.status} onChange={set('status')} />
@@ -50,8 +56,7 @@ function RecordPaymentModal({ open, members, onClose, onSave }) {
 }
 
 function PaymentsPage() {
-  const payments = useAsync(getPayments)
-  const athletes = useAsync(getAthletes)
+  const payments = useAsync(loadPayments)
   const [rows, setRows] = useState([])
   const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
@@ -59,7 +64,7 @@ function PaymentsPage() {
   const [open, setOpen] = useState(false)
   const { push } = useToast()
 
-  useEffect(() => { if (payments.data) setRows(payments.data) }, [payments.data])
+  useEffect(() => { if (payments.data) setRows(payments.data.payments) }, [payments.data])
   useEffect(() => { setPage(1) }, [filter, search])
 
   const monthPaid = rows.filter((r) => r.status === 'Paid' && r.date.startsWith(THIS_MONTH))
@@ -76,18 +81,27 @@ function PaymentsPage() {
 
   const filtered = rows.filter((r) => (filter === 'All' || r.status === filter) && `${r.member} ${r.type} ${r.id}`.toLowerCase().includes(search.toLowerCase().trim()))
   const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const memberOptions = (athletes.data || []).map((a) => `${a.firstName} ${a.lastName}`)
+  const memberOptions = (payments.data?.members || []).map((m) => ({ value: m.id, label: USE_MOCKS ? m.name : `${m.name} · ${m.type}`, name: m.name }))
 
-  function markPaid(id) {
-    setRows((list) => list.map((r) => (r.id === id ? { ...r, status: 'Paid' } : r)))
-    push(`Payment #${id} marked as paid`)
+  async function markPaid(row) {
+    try {
+      const updated = await markPaymentPaid(row)
+      setRows((list) => list.map((r) => (r.id === row.id ? { ...r, ...updated } : r)))
+      push(`Payment #${row.id} marked as paid`)
+    } catch (e) {
+      push(errorMessage(e), 'error')
+    }
   }
 
-  function save(p) {
-    const id = Math.max(0, ...rows.map((r) => r.id)) + 1
-    setRows((list) => [{ id, date: '2026-09-29', ...p }, ...list])
-    setOpen(false)
-    push(`Payment #${id} recorded`)
+  async function save(p) {
+    try {
+      const created = await recordPayment(p)
+      setRows((list) => [created, ...list])
+      setOpen(false)
+      push(`Payment #${created.id} recorded`)
+    } catch (e) {
+      push(errorMessage(e), 'error')
+    }
   }
 
   const loading = payments.status === 'loading'
@@ -106,15 +120,15 @@ function PaymentsPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard icon={Wallet} tone="green" label="Revenue this month" value={formatMoney(revenue)} note={`${monthPaid.length} paid transactions`} />
             <StatCard icon={AlertCircle} tone="amber" label="Outstanding" value={formatMoney(outstanding)} note={`${pendingCount} pending payments`} />
-            <StatCard icon={Receipt} label="Transactions" value={rows.length} note="last 60 days" />
+            <StatCard icon={Receipt} label="Transactions" value={rows.length} note="on record" />
             <StatCard icon={TrendingUp} tone="violet" label="Failed / refunded" value={issues} note="need attention" />
           </div>
 
           <Card>
-            <CardHeader title="Revenue by source" subtitle="Last 6 months (GH₵)" />
+            <CardHeader title="Revenue by source" subtitle={USE_MOCKS ? 'Last 6 months (GH₵)' : 'Completed payments by month (GH₵)'} />
             <div className="h-72 px-2 pb-4 pt-4">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={revenueByMonth} margin={{ left: 0, right: 16 }}>
+                <BarChart data={payments.data.revenue} margin={{ left: 0, right: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} width={48} tickFormatter={(v) => `${v / 1000}k`} />
@@ -153,7 +167,7 @@ function PaymentsPage() {
                         <td className="px-5 py-3 text-gray-700">{r.method}</td>
                         <td className="px-5 py-3 font-semibold text-gray-900">{formatMoney(r.amount)}</td>
                         <td className="px-5 py-3"><Badge tone={statusTone[r.status]}>{r.status}</Badge></td>
-                        <td className="px-5 py-3 text-right">{r.status === 'Pending' && <Button size="sm" variant="secondary" onClick={() => markPaid(r.id)}>Mark paid</Button>}</td>
+                        <td className="px-5 py-3 text-right">{r.status === 'Pending' && <Button size="sm" variant="secondary" onClick={() => markPaid(r)}>Mark paid</Button>}</td>
                       </tr>
                     ))}
                   </tbody>

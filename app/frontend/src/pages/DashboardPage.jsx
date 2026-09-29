@@ -172,13 +172,14 @@ function DashboardPage() {
 
               <Card>
                 <CardHeader title="Recent activity" action={isAdmin && <Link to="/settings?tab=audit" className="text-sm font-medium text-blue-600 hover:text-blue-700">Audit log</Link>} />
+                {data.activity.length === 0 && <p className="px-5 py-6 text-sm text-gray-500">No recent activity.</p>}
                 <ul className="divide-y divide-gray-100">
                   {data.activity.map((e) => (
                     <li key={e.id} className="flex gap-3 px-5 py-3">
                       <Activity size={16} className="mt-0.5 shrink-0 text-blue-600" />
                       <div>
                         <p className="text-sm text-gray-800"><span className="font-medium">{e.actor}</span> {e.action} <span className="font-medium">{e.target}</span></p>
-                        <p className="text-xs text-gray-500">{formatDate(e.time, { day: 'numeric', month: 'short' })}, {new Date(e.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
+                        <p className="text-xs text-gray-500">{formatDate(e.time, { day: 'numeric', month: 'short' })}{String(e.time).includes('T') && `, ${new Date(e.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`}</p>
                       </div>
                     </li>
                   ))}

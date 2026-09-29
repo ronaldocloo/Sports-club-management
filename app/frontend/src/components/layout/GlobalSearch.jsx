@@ -1,24 +1,29 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search } from 'lucide-react'
-import { searchIndex } from '../../mocks/demoData'
+import { getSearchIndex } from '../../api/search'
 import useClickOutside from '../../hooks/useClickOutside'
 
 function GlobalSearch() {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
+  const [index, setIndex] = useState([])
   const ref = useRef(null)
   const navigate = useNavigate()
   useClickOutside(ref, () => setOpen(false))
 
+  useEffect(() => {
+    if (open && index.length === 0) getSearchIndex().then(setIndex).catch(() => setIndex([]))
+  }, [open, index.length])
+
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return []
-    const hits = searchIndex.filter((i) => `${i.label} ${i.sub}`.toLowerCase().includes(q))
+    const hits = index.filter((i) => `${i.label} ${i.sub}`.toLowerCase().includes(q)).slice(0, 30)
     const map = new Map()
     hits.forEach((h) => map.set(h.type, [...(map.get(h.type) || []), h]))
     return [...map.entries()]
-  }, [query])
+  }, [query, index])
 
   function go(item) {
     setOpen(false)

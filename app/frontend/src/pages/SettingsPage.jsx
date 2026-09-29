@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Check, Search } from 'lucide-react'
-import { auditLog } from '../mocks/auditData'
+import { getAuditLog } from '../api/operations'
+import useAsync from '../hooks/useAsync'
 import { demoOrganizations } from '../mocks/usersData'
 import { organization } from '../mocks/demoData'
 import { useAuth } from '../context/AuthContext'
@@ -127,10 +128,20 @@ function SubscriptionTab() {
 }
 
 function AuditTab() {
+  const { data, status } = useAsync(getAuditLog)
   const [q, setQ] = useState('')
   const [kind, setKind] = useState('All')
+  const auditLog = useMemo(() => data || [], [data])
   const kinds = ['All', ...new Set(auditLog.map((a) => a.kind))]
-  const rows = useMemo(() => auditLog.filter((a) => (kind === 'All' || a.kind === kind) && `${a.actor} ${a.action} ${a.target}`.toLowerCase().includes(q.toLowerCase().trim())), [q, kind])
+  const rows = useMemo(() => auditLog.filter((a) => (kind === 'All' || a.kind === kind) && `${a.actor} ${a.action} ${a.target}`.toLowerCase().includes(q.toLowerCase().trim())), [auditLog, q, kind])
+  if (status === 'ready' && auditLog.length === 0) {
+    return (
+      <Card>
+        <CardHeader title="Audit log" subtitle="Who changed what, and when." />
+        <div className="p-6"><EmptyState title="Audit logging isn't enabled yet" description="The server doesn't record an audit trail yet. Entries will appear here once it does." /></div>
+      </Card>
+    )
+  }
   return (
     <Card>
       <CardHeader title="Audit log" subtitle="Who changed what, and when." />

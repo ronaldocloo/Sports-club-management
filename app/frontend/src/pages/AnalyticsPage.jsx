@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Activity, Building2, Lightbulb, Target, TrendingUp, Users, Wallet } from 'lucide-react'
+import { Activity, Building2, Lightbulb, Shield, Target, TrendingUp, Users, Wallet } from 'lucide-react'
 import { getAnalytics } from '../api/analytics'
 import useAsync from '../hooks/useAsync'
 import { Badge, Card, CardHeader, CardSkeleton, EmptyState, ErrorState, PageHeader, StatCard, TableSkeleton } from '../components/ui'
@@ -13,11 +13,13 @@ const insightStyle = {
   red: 'bg-red-50 text-red-700',
 }
 
-function ChartCard({ title, subtitle, children, className = '' }) {
+function ChartCard({ title, subtitle, children, className = '', empty = false }) {
   return (
     <Card className={className}>
       <CardHeader title={title} subtitle={subtitle} />
-      <div className="h-64 px-2 pb-4 pt-4">{children}</div>
+      <div className="h-64 px-2 pb-4 pt-4">
+        {empty ? <div className="flex h-full items-center justify-center text-sm text-gray-500">No data yet</div> : children}
+      </div>
     </Card>
   )
 }
@@ -43,10 +45,10 @@ function AnalyticsPage() {
         return (
           <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              <StatCard icon={Wallet} tone="green" label="Monthly revenue" value={formatMoney(kpis.revenue)} trend={kpis.revChange} note="vs last month" />
-              <StatCard icon={Users} label="Athletes" value={kpis.athletes} trend={kpis.growth} note="vs last month" />
+              <StatCard icon={Wallet} tone="green" label="Monthly revenue" value={formatMoney(kpis.revenue)} trend={data.revenueByMonth.length > 1 ? kpis.revChange : undefined} note={kpis.revenueLabel ? `${kpis.revenueLabel}${data.revenueByMonth.length > 1 ? ', vs previous month' : ''}` : 'no payments yet'} />
+              <StatCard icon={Users} label="Athletes" value={kpis.athletes} trend={kpis.growth || undefined} note="registered" />
               <StatCard icon={Target} tone="violet" label="Membership retention" value={`${kpis.retention}%`} note="active + expiring" />
-              <StatCard icon={Activity} tone="amber" label="Average attendance" value={`${kpis.attendance}%`} note="last 24 sessions" />
+              <StatCard icon={Activity} tone="amber" label="Average attendance" value={kpis.attendance != null ? `${kpis.attendance}%` : '—'} note={kpis.attendance != null ? 'last 24 sessions' : 'not tracked yet'} />
               <StatCard icon={Building2} tone="green" label="Facility utilization" value={`${kpis.utilization}%`} note="all facilities" />
             </div>
 
@@ -56,6 +58,7 @@ function AnalyticsPage() {
                 <h2 className="text-sm font-semibold text-gray-900">Insights</h2>
               </div>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {data.insights.length === 0 && <p className="text-sm text-gray-500">Insights will appear once there is more data.</p>}
                 {data.insights.map((i) => (
                   <div key={i.title} className="rounded-lg bg-white p-4 ring-1 ring-gray-100">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${insightStyle[i.tone]}`}>{i.title}</span>
@@ -66,7 +69,7 @@ function AnalyticsPage() {
             </Card>
 
             <div className="grid gap-6 lg:grid-cols-2">
-              <ChartCard title="Athlete growth" subtitle="Registrations over time">
+              <ChartCard title="Athlete growth" subtitle="Registrations over time" empty={data.athleteGrowth.length === 0}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={data.athleteGrowth} margin={{ left: 0, right: 16 }}>
                     <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={0.25} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0} /></linearGradient></defs>
@@ -79,7 +82,7 @@ function AnalyticsPage() {
                 </ResponsiveContainer>
               </ChartCard>
 
-              <ChartCard title="Revenue by source" subtitle="GH₵ per month">
+              <ChartCard title="Revenue by source" subtitle="GH₵ per month" empty={data.revenueByMonth.length === 0}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.revenueByMonth} margin={{ left: 0, right: 16 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
@@ -95,7 +98,7 @@ function AnalyticsPage() {
                 </ResponsiveContainer>
               </ChartCard>
 
-              <ChartCard title="Membership breakdown" subtitle="Current status of every membership">
+              <ChartCard title="Membership breakdown" subtitle="Current status of every membership" empty={data.membershipBreakdown.length === 0}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={data.membershipBreakdown} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={2} stroke="none">
@@ -107,7 +110,7 @@ function AnalyticsPage() {
                 </ResponsiveContainer>
               </ChartCard>
 
-              <ChartCard title="Sports distribution" subtitle="Athletes per sport">
+              <ChartCard title="Sports distribution" subtitle="Athletes per sport" empty={data.sportCounts.length === 0}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.sportCounts} layout="vertical" margin={{ left: 8, right: 16 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
@@ -121,7 +124,7 @@ function AnalyticsPage() {
                 </ResponsiveContainer>
               </ChartCard>
 
-              <ChartCard title="Facility utilization" subtitle="Share of available slots in use (%)">
+              <ChartCard title="Facility utilization" subtitle="Share of available slots in use (%)" empty={data.facilityUse.length === 0}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.facilityUse} margin={{ left: 0, right: 16 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
@@ -162,23 +165,25 @@ function AnalyticsPage() {
 
             <div className="grid gap-6 lg:grid-cols-2">
               <Card>
-                <CardHeader title="Team performance" subtitle="Results from completed competitions" />
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[480px] text-left text-sm">
-                    <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                      <tr>{['Team', 'P', 'W', 'D', 'L', 'Win %', 'Pts'].map((h) => <th key={h} className="px-4 py-3 font-medium">{h}</th>)}</tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {data.teamRows.map((r) => (
-                        <tr key={r.team}>
-                          <td className="px-4 py-3 font-medium text-gray-900">{r.team}</td>
-                          <td className="px-4 py-3">{r.played}</td><td className="px-4 py-3">{r.won}</td><td className="px-4 py-3">{r.drawn}</td><td className="px-4 py-3">{r.lost}</td>
-                          <td className="px-4 py-3">{r.winRate}%</td><td className="px-4 py-3 font-bold text-gray-900">{r.points}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <CardHeader title="Team performance" subtitle={data.teamPerformance.subtitle} />
+                {data.teamPerformance.rows.length === 0 ? (
+                  <div className="p-6"><EmptyState icon={Shield} title="No results yet" description="Team results will appear here once teams have competed." /></div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[480px] text-left text-sm">
+                      <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                        <tr>{data.teamPerformance.columns.map((h) => <th key={h} className="px-4 py-3 font-medium">{h}</th>)}</tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {data.teamPerformance.rows.map((r) => (
+                          <tr key={r[0]}>
+                            {r.map((c, i) => <td key={i} className={`px-4 py-3 ${i === 0 ? 'font-medium text-gray-900' : i === r.length - 1 ? 'font-bold text-gray-900' : ''}`}>{c}</td>)}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </Card>
 
               <Card>

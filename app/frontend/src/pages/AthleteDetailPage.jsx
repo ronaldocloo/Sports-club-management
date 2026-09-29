@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, CalendarCheck, CreditCard, Lightbulb, Mail, Ruler, Shield, Trophy, UserCog, Users, Weight, Cake } from 'lucide-react'
+import { Activity, ArrowLeft, CalendarCheck, CreditCard, Lightbulb, Mail, Ruler, Shield, Trophy, UserCog, Users, Weight, Cake } from 'lucide-react'
 import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { getAthleteProfile } from '../api/athletes'
 import { Avatar, Badge, Button, Card, CardHeader, CardSkeleton, EmptyState, ErrorState, Skeleton } from '../components/ui'
@@ -23,13 +23,21 @@ const membershipState = membershipStatus
 
 function buildInsights(p) {
   const out = []
-  const diff = p.attendance.recentRate - p.attendance.earlierRate
-  if (diff >= 5) out.push(`${p.firstName}'s training attendance increased by ${diff}% over the last 12 sessions.`)
-  else if (diff <= -5) out.push(`${p.firstName}'s training attendance dropped by ${Math.abs(diff)}% over the last 12 sessions. Worth a check-in.`)
-  const t = p.performance.trend
-  if (t.at(-1).score > t[0].score) out.push(`Performance score improved from ${t[0].score} to ${t.at(-1).score} across the last 8 weeks.`)
-  const m = membershipState(p.membership.expiry)
-  if (m.tone !== 'green' && m.key !== 'Pending') out.push(`Membership: ${m.label.toLowerCase()}. Consider sending a renewal reminder.`)
+  if (p.attendance) {
+    const diff = p.attendance.recentRate - p.attendance.earlierRate
+    if (diff >= 5) out.push(`${p.firstName}'s training attendance increased by ${diff}% over the last 12 sessions.`)
+    else if (diff <= -5) out.push(`${p.firstName}'s training attendance dropped by ${Math.abs(diff)}% over the last 12 sessions. Worth a check-in.`)
+  }
+  if (p.performance) {
+    const t = p.performance.trend
+    if (t.at(-1).score > t[0].score) out.push(`Performance score improved from ${t[0].score} to ${t.at(-1).score} across the last 8 weeks.`)
+  }
+  if (p.membership) {
+    const m = membershipState(p.membership)
+    if (m.tone !== 'green' && m.key !== 'Pending') out.push(`Membership: ${m.label.toLowerCase()}. Consider sending a renewal reminder.`)
+  } else {
+    out.push('This athlete has no membership on record.')
+  }
   return out
 }
 
@@ -82,10 +90,10 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
   }
 
   const name = `${p.firstName} ${p.lastName}`
-  const m = membershipState(p.membership.expiry)
-  const pie = Object.entries(p.attendance.counts).map(([k, v]) => ({ name: k, value: v }))
+  const m = p.membership ? membershipState(p.membership) : null
+  const pie = p.attendance ? Object.entries(p.attendance.counts).map(([k, v]) => ({ name: k, value: v })) : []
   const insights = buildInsights(p)
-  const winRate = p.performance.gamesPlayed ? Math.round((p.performance.wins / p.performance.gamesPlayed) * 100) : 0
+  const winRate = p.performance?.gamesPlayed ? Math.round((p.performance.wins / p.performance.gamesPlayed) * 100) : 0
 
   return (
     <div className="space-y-6">
@@ -113,8 +121,8 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
         <Stat icon={Weight} label="Weight" value={p.weightKg ? `${p.weightKg} kg` : '—'} />
         <Stat icon={Shield} label="Team" value={p.teamName} />
         <Stat icon={UserCog} label="Coach" value={p.coachName} />
-        <Stat icon={CreditCard} label="Membership" value={p.membership.type} />
-        <Stat icon={CalendarCheck} label="Attendance" value={`${p.attendance.rate}%`} />
+        <Stat icon={CreditCard} label="Membership" value={p.membership?.type || 'None'} />
+        <Stat icon={CalendarCheck} label="Attendance" value={p.attendance ? `${p.attendance.rate}%` : '—'} />
       </div>
 
       {insights.length > 0 && (
@@ -132,6 +140,8 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader title="Performance" subtitle={p.sampleData ? 'Sample data for demonstration' : undefined} />
+          {p.performance ? (
+            <>
           <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
             {[{ label: 'Games played', value: p.performance.gamesPlayed }, { label: 'Wins', value: `${p.performance.wins} (${winRate}%)` }, ...p.performance.stats].map((s) => (
               <div key={s.label}>
@@ -151,23 +161,33 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
               </LineChart>
             </ResponsiveContainer>
           </div>
+            </>
+          ) : (
+            <div className="p-6"><EmptyState icon={Activity} title="Performance isn't tracked yet" description="Games, scores and trends will appear here once performance recording is added." /></div>
+          )}
         </Card>
 
         <Card>
           <CardHeader title="Membership" />
-          <dl className="space-y-4 p-5 text-sm">
-            <div className="flex items-center justify-between"><dt className="text-gray-500">Status</dt><dd><Badge tone={m.tone}>{m.label}</Badge></dd></div>
-            <div className="flex items-center justify-between"><dt className="text-gray-500">Plan</dt><dd className="font-medium text-gray-900">{p.membership.type}</dd></div>
-            <div className="flex items-center justify-between"><dt className="text-gray-500">Start date</dt><dd className="font-medium text-gray-900">{formatDate(p.membership.start)}</dd></div>
-            <div className="flex items-center justify-between"><dt className="text-gray-500">Expiry date</dt><dd className="font-medium text-gray-900">{formatDate(p.membership.expiry)}</dd></div>
-            <div className="flex items-center justify-between"><dt className="text-gray-500">Payment</dt><dd><Badge tone={payTone[p.membership.payment]}>{p.membership.payment}</Badge></dd></div>
-          </dl>
+          {p.membership ? (
+            <dl className="space-y-4 p-5 text-sm">
+              <div className="flex items-center justify-between"><dt className="text-gray-500">Status</dt><dd><Badge tone={m.tone}>{m.label}</Badge></dd></div>
+              <div className="flex items-center justify-between"><dt className="text-gray-500">Plan</dt><dd className="font-medium text-gray-900">{p.membership.type}</dd></div>
+              <div className="flex items-center justify-between"><dt className="text-gray-500">Start date</dt><dd className="font-medium text-gray-900">{formatDate(p.membership.start)}</dd></div>
+              <div className="flex items-center justify-between"><dt className="text-gray-500">Expiry date</dt><dd className="font-medium text-gray-900">{formatDate(p.membership.expiry)}</dd></div>
+              <div className="flex items-center justify-between"><dt className="text-gray-500">Payment</dt><dd><Badge tone={payTone[p.membership.payment]}>{p.membership.payment}</Badge></dd></div>
+            </dl>
+          ) : (
+            <div className="p-6"><EmptyState icon={CreditCard} title="No membership" description="This athlete has no membership on record." /></div>
+          )}
         </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card>
           <CardHeader title="Attendance" subtitle="Last 24 training sessions" />
+          {p.attendance ? (
+            <>
           <div className="flex items-center gap-4 p-5">
             <div className="h-32 w-32 shrink-0">
               <ResponsiveContainer width="100%" height="100%">
@@ -191,6 +211,10 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
               <span key={i} title={s} className="h-5 w-5 rounded" style={{ background: attendanceColors[s] }} />
             ))}
           </div>
+            </>
+          ) : (
+            <div className="p-6"><EmptyState icon={CalendarCheck} title="Attendance isn't tracked yet" description="Training attendance will appear here once it is recorded." /></div>
+          )}
         </Card>
 
         <Card className="lg:col-span-2">
@@ -206,10 +230,10 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
                 <tbody className="divide-y divide-gray-100">
                   {p.history.map((h) => (
                     <tr key={h.competition + h.date + h.opponent}>
-                      <td className="px-5 py-3"><p className="font-medium text-gray-900">{h.competition}</p><p className="text-xs text-gray-500">{h.round}</p></td>
+                      <td className="px-5 py-3"><p className="font-medium text-gray-900">{h.competition}</p>{h.round && <p className="text-xs text-gray-500">{h.round}</p>}</td>
                       <td className="px-5 py-3 text-gray-700">{formatDate(h.date)}</td>
-                      <td className="px-5 py-3 text-gray-700">{h.team} vs {h.opponent}</td>
-                      <td className="px-5 py-3"><Badge tone={resultTone[h.result]}>{h.result} {h.score}</Badge></td>
+                      <td className="px-5 py-3 text-gray-700">{h.opponent ? `${h.team} vs ${h.opponent}` : h.team}</td>
+                      <td className="px-5 py-3"><Badge tone={h.tone || resultTone[h.result]}>{h.label || `${h.result} ${h.score}`}</Badge></td>
                     </tr>
                   ))}
                 </tbody>

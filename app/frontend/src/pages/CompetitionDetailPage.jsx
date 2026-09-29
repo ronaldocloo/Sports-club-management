@@ -9,7 +9,7 @@ import StandingsTable from '../components/competitions/StandingsTable'
 import { computeStandings, statusTone } from '../utils/competition'
 import { formatDate } from '../utils/format'
 
-const tabs = ['Fixtures', 'Results', 'Standings', 'Teams']
+const allTabs = ['Fixtures', 'Results', 'Standings', 'Teams']
 
 function CompetitionDetailPage() {
   const { competitionId } = useParams()
@@ -25,7 +25,7 @@ function CompetitionDetailPage() {
       .then((c) => {
         setComp(c)
         setFixtures(c?.fixtures || [])
-        setTab(c?.fixtures?.some((f) => f.status !== 'Completed') ? 'Fixtures' : 'Results')
+        setTab(c?.fixturesAvailable === false ? 'Teams' : c?.fixtures?.some((f) => f.status !== 'Completed') ? 'Fixtures' : 'Results')
         setStatus(c ? 'ready' : 'missing')
       })
       .catch(() => setStatus('error'))
@@ -38,6 +38,8 @@ function CompetitionDetailPage() {
   const standings = useMemo(() => computeStandings(comp?.teams || [], fixtures), [comp, fixtures])
   const hasGroup = fixtures.some((f) => /group|round/i.test(f.round))
   const next = upcoming.find((f) => f.home !== 'TBD')
+  const hasFixtures = comp?.fixturesAvailable !== false
+  const tabs = hasFixtures ? allTabs : ['Teams']
 
   function saveResult(id, homeScore, awayScore) {
     setFixtures((list) => list.map((f) => (f.id === id ? { ...f, homeScore, awayScore, status: 'Completed' } : f)))
@@ -73,9 +75,9 @@ function CompetitionDetailPage() {
   const facts = [
     { icon: CalendarDays, label: 'Date', value: formatDate(comp.date) },
     { icon: MapPin, label: 'Venue', value: comp.location },
-    { icon: Building2, label: 'Organizer', value: comp.organizer || '—' },
+    { icon: Building2, label: comp.organizer ? 'Organizer' : 'Level', value: comp.organizer || comp.level || '—' },
     { icon: Users, label: 'Teams', value: comp.teams.length },
-    { icon: Swords, label: 'Matches', value: `${results.length}/${fixtures.length} played` },
+    ...(hasFixtures ? [{ icon: Swords, label: 'Matches', value: `${results.length}/${fixtures.length} played` }] : []),
   ]
 
   return (
@@ -103,6 +105,10 @@ function CompetitionDetailPage() {
           ))}
         </dl>
       </Card>
+
+      {!hasFixtures && (
+        <p className="rounded-lg bg-blue-50 px-4 py-2 text-sm text-blue-800">Match fixtures and live results are not tracked yet. This page shows each registered team's final position and points.</p>
+      )}
 
       {next && (
         <div>
@@ -143,14 +149,36 @@ function CompetitionDetailPage() {
             hasGroup ? <StandingsTable rows={standings} /> : <EmptyState icon={Trophy} title="No standings" description="This is a knockout competition, so there is no league table." />
           )}
           {tab === 'Teams' && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {comp.teams.map((t) => (
-                <Card key={t} className="flex items-center gap-3 p-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Shield size={18} /></div>
-                  <span className="text-sm font-medium text-gray-900">{t}</span>
-                </Card>
-              ))}
-            </div>
+            comp.entries?.length ? (
+              <Card className="overflow-x-auto">
+                <table className="w-full min-w-[420px] text-left text-sm">
+                  <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                    <tr><th className="px-5 py-3 font-medium">Team</th><th className="px-5 py-3 font-medium">Registered</th><th className="px-5 py-3 font-medium">Final position</th><th className="px-5 py-3 font-medium">Points</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {comp.entries.map((e) => (
+                      <tr key={e.team}>
+                        <td className="px-5 py-3 font-medium text-gray-900">{e.team}</td>
+                        <td className="px-5 py-3 text-gray-700">{e.registrationDate ? formatDate(e.registrationDate) : '—'}</td>
+                        <td className="px-5 py-3 text-gray-700">{e.finalPosition ? `#${e.finalPosition}` : '—'}</td>
+                        <td className="px-5 py-3 text-gray-700">{e.points ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            ) : comp.teams.length ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {comp.teams.map((t) => (
+                  <Card key={t} className="flex items-center gap-3 p-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><Shield size={18} /></div>
+                    <span className="text-sm font-medium text-gray-900">{t}</span>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <EmptyState icon={Shield} title="No teams registered" description="Teams that register for this competition will appear here." />
+            )
           )}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { errorMessage } from '../../api/client'
 import { Button, Input, Modal, Select } from '../ui'
 
 const empty = { name: '', date: '', venue: '', level: '', registrationDeadline: '' }
@@ -24,7 +25,7 @@ function CompetitionForm({ open, onClose, onSubmit }) {
     if (Object.keys(err).length) return
     setSaving(true); setSubmitError('')
     try { await onSubmit({ ...v, name: v.name.trim(), venue: v.venue.trim() }); close() }
-    catch { setSubmitError("We couldn't create this competition. Please try again.") }
+    catch (e) { setSubmitError(errorMessage(e, "We couldn't create this competition. Please try again.")) }
     finally { setSaving(false) }
   }
 
