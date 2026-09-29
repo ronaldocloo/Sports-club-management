@@ -3,6 +3,7 @@ import { NavLink, Link } from 'react-router-dom'
 import { ChevronDown, Trophy, X } from 'lucide-react'
 import { navGroups } from './navConfig'
 import { useAuth } from '../../context/AuthContext'
+import { useOrganization } from '../../context/OrganizationContext'
 import { canAccess } from '../../utils/permissions'
 
 // Desktop (lg+): full sidebar with collapsible groups.
@@ -10,6 +11,7 @@ import { canAccess } from '../../utils/permissions'
 function Sidebar({ mobileOpen, onClose }) {
   const [collapsed, setCollapsed] = useState({})
   const { user } = useAuth()
+  const { organization } = useOrganization()
   const groups = navGroups
     .map((g) => ({ ...g, items: g.items.filter((i) => canAccess(user?.role, i.path)) }))
     .filter((g) => g.items.length > 0)
@@ -29,7 +31,7 @@ function Sidebar({ mobileOpen, onClose }) {
             </div>
             <div className="leading-tight md:hidden lg:block">
               <p className="text-sm font-bold text-gray-900">Sports Club</p>
-              <p className="text-[11px] text-gray-500">Management Platform</p>
+              <p className="max-w-[9.5rem] truncate text-[11px] text-gray-500">{organization?.name || 'Management Platform'}</p>
             </div>
           </Link>
           <button onClick={onClose} aria-label="Close menu" className="rounded-md p-1 text-gray-400 hover:bg-gray-100 md:hidden">

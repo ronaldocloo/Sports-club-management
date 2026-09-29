@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { normalizeRole } from '../utils/permissions'
 import { Badge, Card, CardHeader, CardSkeleton, ErrorState, PageHeader, StatCard, TableSkeleton } from '../components/ui'
 import { formatDate, formatMoney } from '../utils/format'
-import { organization } from '../mocks/demoData'
+import { useOrganization } from '../context/OrganizationContext'
 
 // Which KPI cards each role sees.
 const roleKpis = {
@@ -35,6 +35,7 @@ function greeting() {
 function DashboardPage() {
   const { data, status, reload } = useAsync(getDashboard)
   const { user } = useAuth()
+  const { organization } = useOrganization()
   const role = normalizeRole(user?.role)
   const firstName = (user?.fullName || user?.username || 'there').split(' ')[0]
   const showFinance = role === 'Admin' || role === 'SuperAdmin' || role === 'FrontDesk'
@@ -42,7 +43,7 @@ function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow={organization.name} title={`${greeting()}, ${firstName}`} description="Here's what is happening in your sports organization." />
+      <PageHeader eyebrow={organization?.name || 'Sports organization'} title={`${greeting()}, ${firstName}`} description="Here's what is happening in your sports organization." />
 
       {status === 'loading' && (
         <>

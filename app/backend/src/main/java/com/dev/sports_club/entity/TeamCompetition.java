@@ -1,5 +1,7 @@
 package com.dev.sports_club.entity;
 
+import com.dev.sports_club.tenant.TenantOwned;
+import org.hibernate.annotations.Filter;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -9,12 +11,13 @@ import lombok.Setter;
 import java.time.LocalDate;
 
 @Entity
+@Filter(name = "tenant")
 @Table(name = "team_competition")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class TeamCompetition {
+public class TeamCompetition extends TenantOwned {
 
     @EmbeddedId
     private TeamCompetitionId id;

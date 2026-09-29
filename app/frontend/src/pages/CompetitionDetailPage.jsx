@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Building2, CalendarDays, MapPin, Shield, Swords, Trophy, Users } from 'lucide-react'
+import { ArrowLeft, Building2, Plus, CalendarDays, MapPin, Shield, Swords, Trophy, Users } from 'lucide-react'
 import { getCompetitionDetail } from '../api/competitions'
-import { Badge, Button, Card, EmptyState, ErrorState, Skeleton, CardSkeleton } from '../components/ui'
+import { createFixture, recordFixtureResult } from '../api/fixtures'
+import { errorMessage } from '../api/client'
+import { useAuth } from '../context/AuthContext'
+import { normalizeRole } from '../utils/permissions'
+import { Badge, Button, Card, EmptyState, ErrorState, Skeleton, CardSkeleton, useToast } from '../components/ui'
+import FixtureForm from '../components/competitions/FixtureForm'
 import FixtureCard from '../components/competitions/FixtureCard'
 import ResultModal from '../components/competitions/ResultModal'
 import StandingsTable from '../components/competitions/StandingsTable'
@@ -18,6 +23,12 @@ function CompetitionDetailPage() {
   const [status, setStatus] = useState('loading')
   const [tab, setTab] = useState('Fixtures')
   const [recording, setRecording] = useState(null)
+  const [adding, setAdding] = useState(false)
+  const { user } = useAuth()
+  const { push } = useToast()
+  const role = normalizeRole(user?.role)
+  const canManage = role === 'Admin' || role === 'SuperAdmin'
+  const canRecord = canManage || role === 'Coach'
 
   const load = useCallback(() => {
     setStatus('loading')
@@ -35,16 +46,35 @@ function CompetitionDetailPage() {
 
   const upcoming = useMemo(() => fixtures.filter((f) => f.status !== 'Completed'), [fixtures])
   const results = useMemo(() => fixtures.filter((f) => f.status === 'Completed'), [fixtures])
-  const standings = useMemo(() => computeStandings(comp?.teams || [], fixtures), [comp, fixtures])
-  const hasGroup = fixtures.some((f) => /group|round/i.test(f.round))
+  const standings = useMemo(() => comp?.standings || computeStandings(comp?.teams || [], fixtures), [comp, fixtures])
+  const hasGroup = comp?.serverFixtures ? standings.length > 0 : fixtures.some((f) => /group|round/i.test(f.round))
   const next = upcoming.find((f) => f.home !== 'TBD')
   const hasFixtures = comp?.fixturesAvailable !== false
   const tabs = hasFixtures ? allTabs : ['Teams']
 
-  function saveResult(id, homeScore, awayScore) {
+  async function saveResult(id, homeScore, awayScore) {
+    if (comp.serverFixtures) {
+      try {
+        await recordFixtureResult(id, homeScore, awayScore)
+        setRecording(null)
+        push('Result recorded')
+        load()
+        setTab('Results')
+      } catch (e) {
+        push(errorMessage(e), 'error')
+      }
+      return
+    }
     setFixtures((list) => list.map((f) => (f.id === id ? { ...f, homeScore, awayScore, status: 'Completed' } : f)))
     setRecording(null)
     setTab('Results')
+  }
+
+  async function addFixture(values) {
+    await createFixture({ ...values, competitionId: comp.competitionId })
+    push('Fixture scheduled')
+    load()
+    setTab('Fixtures')
   }
 
   const back = (
@@ -113,11 +143,14 @@ function CompetitionDetailPage() {
       {next && (
         <div>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Next match</h2>
-          <FixtureCard fixture={next} featured onRecord={setRecording} />
+          <FixtureCard fixture={next} featured onRecord={canRecord ? setRecording : undefined} />
         </div>
       )}
 
       <div>
+        {comp.serverFixtures && canManage && (
+          <div className="mb-3 flex justify-end"><Button icon={Plus} size="sm" onClick={() => setAdding(true)}>Schedule fixture</Button></div>
+        )}
         <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-gray-200">
           {tabs.map((t) => (
             <button
@@ -137,7 +170,7 @@ function CompetitionDetailPage() {
         <div className="mt-5">
           {tab === 'Fixtures' && (
             upcoming.length ? (
-              <div className="grid gap-4 md:grid-cols-2">{upcoming.map((f) => <FixtureCard key={f.id} fixture={f} onRecord={setRecording} />)}</div>
+              <div className="grid gap-4 md:grid-cols-2">{upcoming.map((f) => <FixtureCard key={f.id} fixture={f} onRecord={canRecord ? setRecording : undefined} />)}</div>
             ) : <EmptyState icon={CalendarDays} title="No upcoming fixtures" description="All matches in this competition have been played." />
           )}
           {tab === 'Results' && (
@@ -183,6 +216,7 @@ function CompetitionDetailPage() {
         </div>
       </div>
 
+      {comp.serverFixtures && <FixtureForm open={adding} teams={comp.entries || []} defaultVenue={comp.location} onClose={() => setAdding(false)} onSubmit={addFixture} />}
       <ResultModal fixture={recording} onClose={() => setRecording(null)} onSave={saveResult} />
     </div>
   )

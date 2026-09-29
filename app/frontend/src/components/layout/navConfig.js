@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, UserCog, Shield, Trophy, Layers, CreditCard, Wallet,
-  Building2, CalendarCheck, UserCircle, CalendarDays, BarChart3, FileText, UserRound, Bell, Settings,
+  Building2, CalendarCheck, UserCircle, ClipboardCheck, Landmark, CalendarDays, BarChart3, FileText, UserRound, Bell, Settings,
 } from 'lucide-react'
 
 export const navGroups = [
@@ -11,6 +11,7 @@ export const navGroups = [
       { name: 'Athletes', path: '/athletes', icon: Users },
       { name: 'Coaches', path: '/coaches', icon: UserCog },
       { name: 'Teams', path: '/teams', icon: Shield },
+      { name: 'Attendance', path: '/attendance', icon: ClipboardCheck },
       { name: 'Competitions', path: '/competitions', icon: Trophy },
       { name: 'Sports', path: '/sports', icon: Layers },
     ],
@@ -35,6 +36,7 @@ export const navGroups = [
   {
     label: 'System',
     items: [
+      { name: 'Organizations', path: '/organizations', icon: Landmark },
       { name: 'Users', path: '/users', icon: UserRound },
       { name: 'Notifications', path: '/notifications', icon: Bell },
       { name: 'Settings', path: '/settings', icon: Settings },

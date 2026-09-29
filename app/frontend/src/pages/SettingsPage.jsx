@@ -1,15 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Check, Search } from 'lucide-react'
 import { getAuditLog } from '../api/operations'
 import { changePassword } from '../api/auth'
 import { errorMessage, USE_MOCKS } from '../api/client'
 import useAsync from '../hooks/useAsync'
-import { demoOrganizations } from '../mocks/usersData'
-import { organization } from '../mocks/demoData'
+import { getCurrentOrganization, renameCurrentOrganization } from '../api/organizations'
+import { useOrganization } from '../context/OrganizationContext'
 import { useAuth } from '../context/AuthContext'
 import { ROLE_LABELS, normalizeRole } from '../utils/permissions'
-import { Badge, Button, Card, CardHeader, EmptyState, Input, PageHeader, Select, Tabs, useToast } from '../components/ui'
+import { Badge, Button, Card, CardHeader, EmptyState, Input, PageHeader, TableSkeleton, Tabs, useToast } from '../components/ui'
 import { formatDate } from '../utils/format'
 
 const plans = [
@@ -20,27 +20,39 @@ const plans = [
 
 function OrganizationTab() {
   const { push } = useToast()
-  const [v, setV] = useState({ name: organization.name, location: organization.location, email: 'info@ashesisports.example', phone: '+233 30 210 0000', currency: 'GHS' })
-  const [errors, setErrors] = useState({})
-  const set = (k) => (e) => setV((s) => ({ ...s, [k]: e.target.value }))
-  function save(e) {
+  const { refresh } = useOrganization()
+  const { data: org, status } = useAsync(getCurrentOrganization)
+  const [name, setName] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { if (org) setName(org.name) }, [org])
+
+  async function save(e) {
     e.preventDefault()
-    const err = {}
-    if (!v.name.trim()) err.name = 'Organization name is required.'
-    if (v.email && !/^\S+@\S+\.\S+$/.test(v.email)) err.email = 'Enter a valid email address.'
-    setErrors(err)
-    if (!Object.keys(err).length) push('Organization settings saved')
+    if (!name.trim()) return setError('Organization name is required.')
+    setSaving(true)
+    try {
+      await renameCurrentOrganization(name.trim())
+      await refresh()
+      push('Organization settings saved')
+    } catch (e2) {
+      setError(errorMessage(e2))
+    } finally {
+      setSaving(false)
+    }
   }
+
+  if (status === 'loading') return <TableSkeleton rows={3} />
+  if (!org) return <Card><div className="p-6"><EmptyState title="No organization selected" description="Choose an organization from the top bar to edit its settings." /></div></Card>
+
   return (
     <Card>
-      <CardHeader title="Organization" subtitle="Shown on reports and invoices." />
+      <CardHeader title="Organization" subtitle="Shown in the sidebar and on reports." />
       <form onSubmit={save} noValidate className="grid gap-4 p-5 sm:grid-cols-2">
-        <Input label="Organization name" required value={v.name} onChange={set('name')} error={errors.name} />
-        <Input label="Location" value={v.location} onChange={set('location')} />
-        <Input label="Contact email" type="email" value={v.email} onChange={set('email')} error={errors.email} />
-        <Input label="Phone" value={v.phone} onChange={set('phone')} />
-        <Select label="Currency" options={[{ value: 'GHS', label: 'Ghana cedi (GH₵)' }, { value: 'USD', label: 'US dollar ($)' }]} value={v.currency} onChange={set('currency')} />
-        <div className="flex items-end justify-end sm:col-span-2"><Button type="submit">Save changes</Button></div>
+        <Input label="Organization name" required value={name} onChange={(e) => { setName(e.target.value); setError('') }} error={error} />
+        <div><p className="mb-1.5 text-sm font-medium text-gray-700">Plan</p><p className="flex items-center gap-2 py-2.5 text-sm text-gray-900"><Badge tone="blue">{org.plan}</Badge> <span className="text-xs text-gray-500">Status: {org.status}</span></p></div>
+        <div className="flex items-end justify-end sm:col-span-2"><Button type="submit" loading={saving}>Save changes</Button></div>
       </form>
     </Card>
   )
@@ -122,11 +134,12 @@ function PreferencesTab() {
 }
 
 function SubscriptionTab() {
+  const { organization } = useOrganization()
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
         {plans.map((p) => {
-          const current = p.name === organization.plan
+          const current = p.name === organization?.plan
           return (
             <Card key={p.name} className={`p-5 ${current ? 'border-blue-300 ring-1 ring-blue-200' : ''}`}>
               <div className="flex items-center justify-between"><h3 className="text-base font-semibold text-gray-900">{p.name}</h3>{current && <Badge tone="blue">Current plan</Badge>}</div>
@@ -169,30 +182,12 @@ function AuditTab() {
         <ul className="divide-y divide-gray-100">
           {rows.map((a) => (
             <li key={a.id} className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-gray-800"><span className="font-medium">{a.actor}</span> {a.action} <span className="font-medium">{a.target}</span></p>
+              <p className="text-sm text-gray-800">{a.text ? a.text : (<><span className="font-medium">{a.actor}</span> {a.action} <span className="font-medium">{a.target}</span></>)}</p>
               <p className="shrink-0 text-xs text-gray-500">{formatDate(a.time, { day: 'numeric', month: 'short' })}, {new Date(a.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
             </li>
           ))}
         </ul>
       )}
-    </Card>
-  )
-}
-
-function OrganizationsTab() {
-  return (
-    <Card>
-      <CardHeader title="Organizations" subtitle="Each organization only sees its own data." />
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-left text-sm">
-          <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr>{['Organization', 'Plan', 'Athletes', 'Status'].map((h) => <th key={h} className="px-5 py-3 font-medium">{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-gray-100">
-            {demoOrganizations.map((o) => (
-              <tr key={o.id}><td className="px-5 py-3 font-medium text-gray-900">{o.name}</td><td className="px-5 py-3 text-gray-700">{o.plan}</td><td className="px-5 py-3 text-gray-700">{o.athletes}</td><td className="px-5 py-3"><Badge tone={o.status === 'Active' ? 'green' : 'amber'}>{o.status}</Badge></td></tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </Card>
   )
 }
@@ -208,7 +203,6 @@ function SettingsPage() {
     { value: 'profile', label: 'Profile' },
     { value: 'notifications', label: 'Notifications' },
     ...(isAdmin ? [{ value: 'subscription', label: 'Subscription' }, { value: 'audit', label: 'Audit log' }] : []),
-    ...(role === 'SuperAdmin' ? [{ value: 'organizations', label: 'Organizations' }] : []),
   ]
   const requested = params.get('tab')
   const tab = tabs.some((t) => t.value === requested) ? requested : tabs[0].value
@@ -223,7 +217,6 @@ function SettingsPage() {
       {tab === 'notifications' && <PreferencesTab />}
       {tab === 'subscription' && <SubscriptionTab />}
       {tab === 'audit' && <AuditTab />}
-      {tab === 'organizations' && <OrganizationsTab />}
     </div>
   )
 }

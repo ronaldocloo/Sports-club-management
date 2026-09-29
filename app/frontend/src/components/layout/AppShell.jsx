@@ -4,6 +4,7 @@ import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import { ToastProvider } from '../ui'
 import { NotificationsProvider } from './NotificationsContext'
+import { OrganizationProvider } from '../../context/OrganizationContext'
 import { useAuth } from '../../context/AuthContext'
 import { canAccess, homeFor } from '../../utils/permissions'
 import NoAccess from '../../pages/NoAccessPage'
@@ -25,6 +26,7 @@ function AppShell() {
 
   return (
     <ToastProvider>
+    <OrganizationProvider>
     <NotificationsProvider>
     <div className="min-h-screen bg-gray-50">
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
@@ -36,6 +38,7 @@ function AppShell() {
       </div>
     </div>
     </NotificationsProvider>
+    </OrganizationProvider>
     </ToastProvider>
   )
 }

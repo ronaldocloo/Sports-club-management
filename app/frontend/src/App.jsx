@@ -25,6 +25,8 @@ import BookingsPage from "./pages/BookingsPage";
 import EventsPage from "./pages/EventsPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import ReportsPage from "./pages/ReportsPage";
+import AttendancePage from "./pages/AttendancePage";
+import OrganizationsPage from "./pages/OrganizationsPage";
 
 import RequireAuth from "./components/auth/RequireAuth";
 
@@ -53,6 +55,8 @@ function App() {
           <Route path="/facilities" element={<RequireAuth><FacilitiesPage /></RequireAuth>} />
           <Route path="/bookings" element={<RequireAuth><BookingsPage /></RequireAuth>} />
           <Route path="/events" element={<RequireAuth><EventsPage /></RequireAuth>} />
+          <Route path="/attendance" element={<RequireAuth><AttendancePage /></RequireAuth>} />
+          <Route path="/organizations" element={<RequireAuth><OrganizationsPage /></RequireAuth>} />
           <Route path="/analytics" element={<RequireAuth><AnalyticsPage /></RequireAuth>} />
           <Route path="/reports" element={<RequireAuth><ReportsPage /></RequireAuth>} />
 

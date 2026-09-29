@@ -3,7 +3,7 @@ import { Bell, Building2, CalendarDays, Check, CreditCard, Trash2, Trophy, UserP
 import { useNotifications } from '../components/layout/NotificationsContext'
 import { Button, Card, EmptyState, PageHeader, Tabs } from '../components/ui'
 
-const icons = { membership: CreditCard, competition: Trophy, athlete: UserPlus, payment: CreditCard, facility: Building2, event: CalendarDays }
+const icons = { membership: CreditCard, competition: Trophy, athlete: UserPlus, payment: CreditCard, facility: Building2, event: CalendarDays, fixture: Trophy }
 
 function NotificationsPage() {
   const { items, unread, markRead, markAllRead, remove } = useNotifications()

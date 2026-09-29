@@ -2,7 +2,9 @@ package com.dev.sports_club.controller;
 
 import com.dev.sports_club.dto.AppUserResponse;
 import com.dev.sports_club.dto.ChangePasswordRequest;
+import com.dev.sports_club.entity.AuditAction;
 import com.dev.sports_club.service.AppUserService;
+import com.dev.sports_club.service.AuditService;
 import com.dev.sports_club.dto.LoginRequest;
 import com.dev.sports_club.entity.AppUser;
 import com.dev.sports_club.repository.AppUserRepository;
@@ -30,12 +32,19 @@ public class AuthController {
     private final SecurityContextRepository securityContextRepository;
     private final AppUserRepository appUserRepository;
     private final AppUserService appUserService;
+    private final AuditService audit;
 
     @PostMapping("/login")
     public AppUserResponse login(@Valid @RequestBody LoginRequest request,
                                   HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
+        } catch (org.springframework.security.core.AuthenticationException e) {
+            audit.recordFor(request.getUsername(), AuditAction.LOGIN_FAILED, "Failed sign-in for " + request.getUsername());
+            throw e;
+        }
 
         // Issue a fresh session id on login so a pre-login session id can never be reused (session fixation).
         if (httpRequest.getSession(false) != null) {
@@ -51,12 +60,17 @@ public class AuthController {
                 .orElseThrow(() -> new EntityNotFoundException("AppUser not found: " + request.getUsername()));
         user.setLastLogin(LocalDateTime.now());
         appUserRepository.save(user);
+        audit.recordFor(user.getUsername(), AuditAction.LOGIN, user.getUsername() + " signed in");
 
         return toResponse(user);
     }
 
     @PostMapping("/logout")
     public void logout(HttpServletRequest httpRequest) {
+        var current = SecurityContextHolder.getContext().getAuthentication();
+        if (current != null && current.isAuthenticated()) {
+            audit.recordFor(current.getName(), AuditAction.LOGOUT, current.getName() + " signed out");
+        }
         SecurityContextHolder.clearContext();
         if (httpRequest.getSession(false) != null) {
             httpRequest.getSession(false).invalidate();
@@ -67,6 +81,7 @@ public class AuthController {
     public void changePassword(@Valid @RequestBody ChangePasswordRequest request) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         appUserService.changePassword(username, request);
+        audit.recordFor(username, AuditAction.PASSWORD_CHANGE, username + " changed their password");
     }
 
     @GetMapping("/me")
@@ -84,6 +99,7 @@ public class AuthController {
                 user.getRole(),
                 user.getCoachId(),
                 user.getAthleteId(),
+                user.getOrganizationId(),
                 user.getIsActive(),
                 user.getLastLogin()
         );

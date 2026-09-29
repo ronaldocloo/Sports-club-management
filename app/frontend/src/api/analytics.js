@@ -74,6 +74,12 @@ function attentionList(directory, members) {
     cur.reasons.push(reason)
     flagged.set(id, cur)
   }
+  if (!USE_MOCKS) {
+    directory.forEach((a) => {
+      const drop = (a.attendanceEarlier ?? 0) - (a.attendanceRecent ?? 0)
+      if (a.attendanceEarlier != null && drop >= 15) add(a.athleteId, a.name, a.sport, `Attendance down ${drop}% over recent sessions`)
+    })
+  }
   if (USE_MOCKS) {
     mockAthletes.forEach((a) => {
       const p = buildAthleteProfile(a)

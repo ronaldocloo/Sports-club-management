@@ -79,3 +79,39 @@ only visible rows and single-record requests for anything else return 403.
   (current password required). Admins can reset a password by sending `password` on `PUT /api/users/{id}`; omit it to keep the current one.
 - An Admin cannot deactivate, delete, or change the role of their own account, and the last active Admin cannot be removed.
 - Usernames are unique; Coach and Athlete accounts must be linked to a coach/athlete record.
+
+
+## Phase 4 additions: multi-organization isolation and audit
+
+Apply `schema/05_phase4_platform.sql`.
+
+### Tenant isolation
+
+- Every data table carries `organization_id` (NOT NULL, no default). New rows are stamped with the caller's
+  organization automatically; nothing can be saved without an owner.
+- The API enables a Hibernate `tenant` filter for each request, so list queries only return the caller's rows.
+  Lookups by primary key (which filters do not cover) go through `TenantJpaRepository`, which hides other
+  organizations' rows, so a guessed id returns 404.
+- Creating a record that references another organization's data (for example a team using another organization's
+  sport) fails, because those ids do not exist from the caller's point of view.
+- Names that used to be globally unique (team, sport, facility, coach email, membership type, payment reference) are
+  now unique per organization. Usernames stay globally unique so sign-in works.
+- A **Super Admin** has no organization. With no `X-Organization-Id` header they see no tenant data and cannot write to
+  it; with the header set to an existing organization they act as an Admin inside it. Only a Super Admin can create
+  organizations or other Super Admins.
+- Suspending an organization ends its users' sessions and blocks sign-in.
+
+### Audit log
+
+`audit_log` records sign-ins (and failures), sign-outs, password changes and every successful create, update and
+delete through the API: who, what, which record, when. Admins read their own organization's entries at
+`GET /api/audit-logs`. Auditing never blocks the action being audited.
+
+### Business rules enforced by the API
+
+- A completed payment can only be refunded, never edited or reverted; a refunded payment is final; completing a
+  payment cannot exceed the membership amount charged.
+- Teams cannot register after a competition's registration deadline; bookings cannot be in the past or on a facility
+  that is not available.
+- Fixtures need two different teams registered in the competition; a coach can record results only for their own teams.
+- Attendance can only be marked for athletes on the team's active roster.

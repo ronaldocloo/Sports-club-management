@@ -17,6 +17,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@org.springframework.transaction.annotation.Transactional
 public class TeamCompetitionService {
 
     private final TeamCompetitionRepository repository;
@@ -38,6 +39,13 @@ public class TeamCompetitionService {
 
     public TeamCompetitionResponse create(TeamCompetitionRequest request) {
         validateReferences(request);
+        competitionRepository.findById(request.getCompetitionId()).ifPresent(c -> {
+            java.time.LocalDate registering = request.getRegistrationDate() != null ? request.getRegistrationDate() : java.time.LocalDate.now();
+            if (c.getRegistrationDeadline() != null && registering.isAfter(c.getRegistrationDeadline())) {
+                throw new com.dev.sports_club.exception.BusinessRuleViolationException(
+                        "Registration for " + c.getCompName() + " closed on " + c.getRegistrationDeadline());
+            }
+        });
         TeamCompetition entity = new TeamCompetition();
         entity.setId(new TeamCompetitionId(request.getTeamId(), request.getCompetitionId()));
         entity.setRegistrationDate(request.getRegistrationDate() != null ? request.getRegistrationDate() : LocalDate.now());

@@ -10,13 +10,13 @@ export const ROLE_LABELS = {
 
 const ALL = [
   '/', '/athletes', '/coaches', '/teams', '/competitions', '/sports', '/memberships', '/payments',
-  '/facilities', '/bookings', '/events', '/analytics', '/reports', '/users', '/notifications', '/settings',
+  '/facilities', '/bookings', '/events', '/attendance', '/analytics', '/reports', '/users', '/notifications', '/settings',
 ]
 
 const ACCESS = {
-  SuperAdmin: ALL,
+  SuperAdmin: [...ALL, '/organizations'],
   Admin: ALL,
-  Coach: ['/', '/athletes', '/teams', '/competitions', '/events', '/notifications', '/settings'],
+  Coach: ['/', '/athletes', '/teams', '/competitions', '/events', '/attendance', '/notifications', '/settings'],
   FrontDesk: ['/', '/athletes', '/memberships', '/payments', '/facilities', '/bookings', '/events', '/notifications', '/settings'],
   Athlete: ['/me', '/competitions', '/events', '/notifications', '/settings'],
 }
@@ -33,6 +33,11 @@ export function canAccess(role, pathname) {
   return allowed.includes(top)
 }
 
-export const homeFor = (role) => (normalizeRole(role) === 'Athlete' ? '/me' : '/')
+export const homeFor = (role) => {
+  const r = normalizeRole(role)
+  if (r === 'Athlete') return '/me'
+  if (r === 'SuperAdmin') return '/organizations'
+  return '/'
+}
 export const roleAccess = ACCESS
 export const moduleList = ALL.filter((p) => p !== '/').map((p) => p.slice(1))

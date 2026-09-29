@@ -1,5 +1,7 @@
 package com.dev.sports_club.entity;
 
+import com.dev.sports_club.tenant.TenantOwned;
+import org.hibernate.annotations.Filter;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -10,12 +12,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
+@Filter(name = "tenant")
 @Table(name = "membership")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class Membership {
+public class Membership extends TenantOwned {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

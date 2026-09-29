@@ -5,7 +5,9 @@ import com.dev.sports_club.dto.ChangePasswordRequest;
 import com.dev.sports_club.entity.AppUserRole;
 import com.dev.sports_club.exception.BusinessRuleViolationException;
 import com.dev.sports_club.repository.AthleteRepository;
+import com.dev.sports_club.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import com.dev.sports_club.dto.AppUserResponse;
 import com.dev.sports_club.entity.AppUser;
@@ -18,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -28,16 +31,38 @@ public class AppUserService {
     private final AthleteRepository athleteRepository;
     private final PasswordEncoder passwordEncoder;
 
+    /** Users of the caller's organization. A Super Admin with no organization selected sees everyone. */
     public List<AppUserResponse> findAll() {
         return repository.findAll().stream()
+                .filter(this::inCallerOrganization)
                 .map(this::toResponse)
                 .toList();
     }
 
     public AppUserResponse findById(Integer id) {
+        return toResponse(load(id));
+    }
+
+    private AppUser load(Integer id) {
         AppUser entity = repository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("AppUser not found: " + id));
-        return toResponse(entity);
+        if (!inCallerOrganization(entity)) {
+            throw new EntityNotFoundException("AppUser not found: " + id);
+        }
+        return entity;
+    }
+
+    // AppUser is not tenant-filtered (usernames are global so login works), so scope it by hand.
+    private boolean inCallerOrganization(AppUser user) {
+        if (!TenantContext.hasOrganization()) {
+            return actorIsSuperAdmin();
+        }
+        return Objects.equals(user.getOrganizationId(), TenantContext.get());
+    }
+
+    private boolean actorIsSuperAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_SuperAdmin"));
     }
 
     public AppUserResponse create(AppUserRequest request) {
@@ -48,7 +73,14 @@ public class AppUserService {
         if (repository.findByUsername(request.getUsername()).isPresent()) {
             throw new BusinessRuleViolationException("Username is already taken: " + request.getUsername());
         }
+        if (request.getRole() == AppUserRole.SuperAdmin && !actorIsSuperAdmin()) {
+            throw new BusinessRuleViolationException("Only a Super Admin can create a Super Admin");
+        }
+        if (request.getRole() != AppUserRole.SuperAdmin && !TenantContext.hasOrganization()) {
+            throw new BusinessRuleViolationException("Select an organization before creating users");
+        }
         AppUser entity = new AppUser();
+        entity.setOrganizationId(request.getRole() == AppUserRole.SuperAdmin ? null : TenantContext.get());
         entity.setUsername(request.getUsername());
         entity.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         entity.setRole(request.getRole());
@@ -60,13 +92,15 @@ public class AppUserService {
 
     public AppUserResponse update(Integer id, AppUserRequest request) {
         validateReferences(request);
-        AppUser entity = repository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("AppUser not found: " + id));
+        AppUser entity = load(id);
+        if ((request.getRole() == AppUserRole.SuperAdmin || entity.getRole() == AppUserRole.SuperAdmin) && !actorIsSuperAdmin()) {
+            throw new BusinessRuleViolationException("Only a Super Admin can manage Super Admin accounts");
+        }
 
         boolean losesAdmin = entity.getRole() == AppUserRole.Admin
                 && Boolean.TRUE.equals(entity.getIsActive())
                 && (request.getRole() != AppUserRole.Admin || Boolean.FALSE.equals(request.getIsActive()));
-        if (losesAdmin && repository.countByRoleAndIsActive(AppUserRole.Admin, true) <= 1) {
+        if (losesAdmin && repository.countByRoleAndIsActiveAndOrganizationId(AppUserRole.Admin, true, entity.getOrganizationId()) <= 1) {
             throw new BusinessRuleViolationException("At least one active Admin account must remain");
         }
         if (Boolean.FALSE.equals(request.getIsActive()) && isCurrentUser(entity)) {
@@ -104,13 +138,12 @@ public class AppUserService {
     }
 
     public void delete(Integer id) {
-        AppUser entity = repository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("AppUser not found: " + id));
+        AppUser entity = load(id);
         if (isCurrentUser(entity)) {
             throw new BusinessRuleViolationException("You cannot delete your own account");
         }
         if (entity.getRole() == AppUserRole.Admin && Boolean.TRUE.equals(entity.getIsActive())
-                && repository.countByRoleAndIsActive(AppUserRole.Admin, true) <= 1) {
+                && repository.countByRoleAndIsActiveAndOrganizationId(AppUserRole.Admin, true, entity.getOrganizationId()) <= 1) {
             throw new BusinessRuleViolationException("At least one active Admin account must remain");
         }
         repository.deleteById(id);
@@ -143,6 +176,7 @@ public class AppUserService {
                 entity.getRole(),
                 entity.getCoachId(),
                 entity.getAthleteId(),
+                entity.getOrganizationId(),
                 entity.getIsActive(),
                 entity.getLastLogin()
         );

@@ -31,6 +31,7 @@ mysql -u root -p < schema/01_create_database.sql
 mysql -u root -p sports_club < schema/02_tables.sql
 mysql -u root -p sports_club < data/01_seed.sql
 mysql -u root -p sports_club < schema/04_phase3_auth.sql   # Athlete role + account linking (safe to re-run)
+mysql -u root -p sports_club < schema/05_phase4_platform.sql # organizations, fixtures, attendance, events, audit (safe to re-run)
 ```
 
 Copy `.env.example` to `.env` and fill in local credentials. Never commit `.env`.
@@ -68,9 +69,22 @@ Copy `.env.example` to `.env` and fill in local credentials. Never commit `.env`
 `VITE_DEMO_MODE=true` and restart `npm run dev`. Remove the file to use the real API. In demo mode a
 "View as" menu lets you preview each role.
 
-**What the real API does not cover yet** (shown as empty states, not fake data): attendance and performance
-tracking, match fixtures/results, an audit log, standalone events (the Events page is built from competitions and
-facility bookings), and deactivating a user (the update endpoint requires a new password).
+**Organizations (multi-tenant).** Every data table belongs to an organization and each request only sees its own
+organization's rows. Existing data is placed in organization 1. A platform **Super Admin** (no organization) creates
+organizations and works inside one at a time from the top bar. There is no Super Admin in the seed; create one locally
+(generate a hash as in step 2 above):
+
+```sql
+INSERT INTO app_user (username, password_hash, role, organization_id, is_active)
+VALUES ('superadmin', '<bcrypt hash>', 'SuperAdmin', NULL, 1);
+```
+
+**Daily job.** At 06:00 server time the backend marks memberships past their end date as Expired and sends expiry
+warnings (an Admin can also trigger it: `POST /api/admin/jobs/run`, for their own organization only). Seed memberships
+with past end dates will therefore become Expired the first time it runs.
+
+**Still demo-only:** the Super Admin "view as" role switcher and sample data exist only in demo mode. Login lockout and
+email (password reset, notification emails) are not implemented.
 
 ## Workflow
 

@@ -44,7 +44,7 @@ public class AccessScope {
         AppUser user = userRepository.findByUsername(auth.getName())
                 .orElseThrow(() -> new AccessDeniedException("Unknown user"));
 
-        if (user.getRole() == AppUserRole.Admin || user.getRole() == AppUserRole.FrontDesk) {
+        if (user.getRole() == AppUserRole.Admin || user.getRole() == AppUserRole.SuperAdmin || user.getRole() == AppUserRole.FrontDesk) {
             return Visible.everything();
         }
 

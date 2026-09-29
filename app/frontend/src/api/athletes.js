@@ -4,6 +4,8 @@ import { athleteGrowthOf, athletesOf, directoryOf, profileOf } from './realData'
 import { mockAthletes, mockTeams } from '../mocks/mockData'
 import { buildAthleteProfile } from '../mocks/athleteData'
 import { athleteGrowth } from '../mocks/demoData'
+import { getAthleteAttendance, getAttendanceRates } from './attendance'
+import { getPerformanceSummary } from './performance'
 import { membershipStatus } from '../utils/membership'
 import { TODAY, TODAY_ISO } from '../utils/today'
 
@@ -32,7 +34,13 @@ export async function getAthleteById(athleteId) {
 
 // Rows for the athlete directory. In the real API attendance is null (not tracked yet).
 export async function getAthleteDirectory() {
-  if (!USE_MOCKS) return directoryOf(await loadAll())
+  if (!USE_MOCKS) {
+    const [raw, rates] = await Promise.all([loadAll(), getAttendanceRates()])
+    return directoryOf(raw).map((row) => {
+      const r = rates[row.athleteId]
+      return r ? { ...row, attendance: r.rate, attendanceRecent: r.recentRate, attendanceEarlier: r.earlierRate } : row
+    })
+  }
   return allMock().map((a) => {
     const p = buildAthleteProfile(a)
     return {
@@ -53,7 +61,10 @@ export async function getAthleteProfile(athleteId) {
     p.history = p.history.map((h) => ({ ...h, label: `${h.result} ${h.score}`, tone: { Win: 'green', Draw: 'amber', Loss: 'red' }[h.result] }))
     return p
   }
-  return profileOf(await loadAll(), athleteId)
+  const profile = profileOf(await loadAll(), athleteId)
+  if (!profile) return null
+  const [attendance, performance] = await Promise.all([getAthleteAttendance(athleteId), getPerformanceSummary(athleteId)])
+  return { ...profile, attendance, performance }
 }
 
 export async function getAthleteGrowth() {

@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Activity, ArrowLeft, CalendarCheck, CreditCard, Lightbulb, Mail, Ruler, Shield, Trophy, UserCog, Users, Weight, Cake } from 'lucide-react'
+import { Activity, ArrowLeft, Plus, CalendarCheck, CreditCard, Lightbulb, Mail, Ruler, Shield, Trophy, UserCog, Users, Weight, Cake } from 'lucide-react'
 import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { getAthleteProfile } from '../api/athletes'
-import { Avatar, Badge, Button, Card, CardHeader, CardSkeleton, EmptyState, ErrorState, Skeleton } from '../components/ui'
+import { recordPerformance, statPresets } from '../api/performance'
+import { errorMessage } from '../api/client'
+import { useAuth } from '../context/AuthContext'
+import { normalizeRole } from '../utils/permissions'
+import { Avatar, Badge, Button, Card, CardHeader, CardSkeleton, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from '../components/ui'
 import { formatDate } from '../utils/format'
 import { membershipStatus } from '../utils/membership'
 
@@ -28,7 +32,7 @@ function buildInsights(p) {
     if (diff >= 5) out.push(`${p.firstName}'s training attendance increased by ${diff}% over the last 12 sessions.`)
     else if (diff <= -5) out.push(`${p.firstName}'s training attendance dropped by ${Math.abs(diff)}% over the last 12 sessions. Worth a check-in.`)
   }
-  if (p.performance) {
+  if (p.performance && p.performance.trend.length > 1) {
     const t = p.performance.trend
     if (t.at(-1).score > t[0].score) out.push(`Performance score improved from ${t[0].score} to ${t.at(-1).score} across the last 8 weeks.`)
   }
@@ -51,11 +55,61 @@ function Stat({ icon: Icon, label, value }) {
 }
 
 // `athleteId` and `portal` are set when this page is used as the athlete's own profile (/me).
+function PerformanceModal({ athlete, open, onClose, onSaved }) {
+  const presets = statPresets[athlete.sport] || ['goals', 'assists']
+  const today = new Date().toISOString().slice(0, 10)
+  const [v, setV] = useState({ recordDate: today, rating: '', notes: '', stats: {} })
+  const [errors, setErrors] = useState({})
+  const [saving, setSaving] = useState(false)
+  const close = () => { setV({ recordDate: today, rating: '', notes: '', stats: {} }); setErrors({}); onClose() }
+
+  async function submit(e) {
+    e.preventDefault()
+    const err = {}
+    if (!v.recordDate) err.recordDate = 'Pick a date.'
+    const rating = Number(v.rating)
+    if (v.rating === '' || Number.isNaN(rating) || rating < 0 || rating > 100) err.rating = 'Enter a rating from 0 to 100.'
+    setErrors(err)
+    if (Object.keys(err).length) return
+    const stats = Object.fromEntries(Object.entries(v.stats).filter(([, n]) => n !== '' && !Number.isNaN(Number(n))).map(([k, n]) => [k, Number(n)]))
+    setSaving(true)
+    try {
+      await recordPerformance({ athleteId: athlete.athleteId, recordDate: v.recordDate, rating, stats, notes: v.notes.trim() || null })
+      await onSaved()
+      close()
+    } catch (e2) {
+      setErrors({ submit: errorMessage(e2, "We couldn't save this record.") })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={close} title={`Record performance: ${athlete.firstName}`}
+      footer={<><Button variant="secondary" onClick={close}>Cancel</Button><Button type="submit" form="performance-form" loading={saving}>Save</Button></>}>
+      <form id="performance-form" onSubmit={submit} noValidate className="grid gap-4 sm:grid-cols-2">
+        <Input label="Date" required type="date" value={v.recordDate} onChange={(e) => setV((s) => ({ ...s, recordDate: e.target.value }))} error={errors.recordDate} />
+        <Input label="Rating (0–100)" required type="number" min="0" max="100" step="0.5" value={v.rating} onChange={(e) => setV((s) => ({ ...s, rating: e.target.value }))} error={errors.rating} />
+        {presets.map((k) => (
+          <Input key={k} label={k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())} type="number" min="0" value={v.stats[k] ?? ''} onChange={(e) => setV((s) => ({ ...s, stats: { ...s.stats, [k]: e.target.value } }))} />
+        ))}
+        <div className="sm:col-span-2"><Input label="Notes" value={v.notes} onChange={(e) => setV((s) => ({ ...s, notes: e.target.value }))} /></div>
+        {errors.submit && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-2">{errors.submit}</p>}
+      </form>
+    </Modal>
+  )
+}
+
 function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
   const params = useParams()
   const athleteId = fixedId ?? params.athleteId
   const [p, setP] = useState(null)
   const [status, setStatus] = useState('loading')
+  const [recording, setRecording] = useState(false)
+  const { user, demoMode } = useAuth()
+  const { push } = useToast()
+  const role = normalizeRole(user?.role)
+  const canRecord = !demoMode && (role === 'Admin' || role === 'SuperAdmin' || role === 'Coach')
 
   const load = useCallback(() => {
     setStatus('loading')
@@ -139,7 +193,8 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Performance" subtitle={p.sampleData ? 'Sample data for demonstration' : undefined} />
+          <CardHeader title="Performance" subtitle={p.sampleData ? 'Sample data for demonstration' : undefined}
+            action={canRecord && <Button size="sm" variant="secondary" icon={Plus} onClick={() => setRecording(true)}>Record</Button>} />
           {p.performance ? (
             <>
           <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
@@ -150,7 +205,7 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
               </div>
             ))}
           </div>
-          <div className="h-56 px-2 pb-4">
+          {p.performance.trend.length > 0 && <div className="h-56 px-2 pb-4">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={p.performance.trend} margin={{ left: 0, right: 16, top: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
@@ -160,10 +215,10 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
                 <Line type="monotone" dataKey="score" name="Score" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          </div>}
             </>
           ) : (
-            <div className="p-6"><EmptyState icon={Activity} title="Performance isn't tracked yet" description="Games, scores and trends will appear here once performance recording is added." /></div>
+            <div className="p-6"><EmptyState icon={Activity} title="No performance recorded yet" description="Ratings, stats and trends will appear here once a coach records them." /></div>
           )}
         </Card>
 
@@ -213,7 +268,7 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
           </div>
             </>
           ) : (
-            <div className="p-6"><EmptyState icon={CalendarCheck} title="Attendance isn't tracked yet" description="Training attendance will appear here once it is recorded." /></div>
+            <div className="p-6"><EmptyState icon={CalendarCheck} title="No attendance recorded yet" description="Training attendance will appear here once a coach records it." /></div>
           )}
         </Card>
 
@@ -242,6 +297,7 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
           )}
         </Card>
       </div>
+      {canRecord && <PerformanceModal athlete={p} open={recording} onClose={() => setRecording(false)} onSaved={async () => { push('Performance recorded'); load() }} />}
     </div>
   )
 }

@@ -18,6 +18,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@org.springframework.transaction.annotation.Transactional
 public class FacilityBookingService {
 
     private final FacilityBookingRepository repository;
@@ -38,6 +39,7 @@ public class FacilityBookingService {
 
     public FacilityBookingResponse create(FacilityBookingRequest request) {
         validateReferences(request);
+        validateBookable(request);
         if (repository.existsByFacilityIdAndBookingDateAndTimeSlot(
                 request.getFacilityId(), request.getBookingDate(), request.getTimeSlot())) {
             throw new BookingConflictException("This facility is already booked for that date and time slot");
@@ -66,6 +68,19 @@ public class FacilityBookingService {
 
     public void delete(Integer id) {
         repository.deleteById(id);
+    }
+
+    /** New bookings must be for today or later, on a facility that is currently open. */
+    private void validateBookable(FacilityBookingRequest request) {
+        if (request.getBookingDate().isBefore(java.time.LocalDate.now())) {
+            throw new com.dev.sports_club.exception.BusinessRuleViolationException("Bookings cannot be made for a past date");
+        }
+        facilityRepository.findById(request.getFacilityId()).ifPresent(f -> {
+            if (f.getStatus() != com.dev.sports_club.entity.FacilityStatus.Available) {
+                throw new com.dev.sports_club.exception.BusinessRuleViolationException(
+                        "This facility is not available for booking (" + f.getStatus() + ")");
+            }
+        });
     }
 
     private void validateReferences(FacilityBookingRequest request) {

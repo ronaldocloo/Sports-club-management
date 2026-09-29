@@ -1,6 +1,7 @@
 import apiClient, { USE_MOCKS } from './client'
 import { invalidate, loadAll } from './raw'
 import { competitionDetailOf, competitionsOf } from './realData'
+import { fetchFixtures, fetchStandings } from './fixtures'
 import { mockCompetitions } from '../mocks/mockData'
 import { competitionDetails } from '../mocks/competitionData'
 
@@ -16,10 +17,20 @@ export async function getCompetitionById(competitionId) {
   return (await getCompetitions()).find((c) => c.competitionId === Number(competitionId))
 }
 
-// Competition plus teams/fixtures. Fixtures and results are demo data only: the backend has
-// no match table, so real competitions show entries (team, final position, points) instead.
+// Competition plus teams, fixtures and standings. Demo mode uses sample fixtures; the real API
+// serves fixtures and computes standings on the server.
 export async function getCompetitionDetail(competitionId) {
-  if (!USE_MOCKS) return competitionDetailOf(await loadAll(), competitionId)
+  if (!USE_MOCKS) {
+    const raw = await loadAll()
+    const detail = competitionDetailOf(raw, competitionId)
+    if (!detail) return null
+    const names = Object.fromEntries(raw.teams.map((t) => [t.teamId, t.teamName]))
+    const [fixtures, standings] = await Promise.all([
+      fetchFixtures(competitionId, names, detail.location).catch(() => []),
+      fetchStandings(competitionId).catch(() => []),
+    ])
+    return { ...detail, fixtures, standings, fixturesAvailable: true, serverFixtures: true }
+  }
   const competition = await getCompetitionById(competitionId)
   if (!competition) return null
   const extra = competitionDetails[competition.competitionId] || { teams: [], fixtures: [], level: competition.level }

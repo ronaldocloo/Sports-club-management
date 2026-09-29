@@ -16,6 +16,7 @@ import java.util.List;
 public class AthleteService {
 
     private final AthleteRepository repository;
+    private final NotificationService notifications;
 
     public List<AthleteResponse> findAll() {
         return repository.findAll().stream()
@@ -33,7 +34,10 @@ public class AthleteService {
         Athlete entity = new Athlete();
         applyRequest(entity, request);
         entity.setJoinDate(request.getJoinDate() != null ? request.getJoinDate() : LocalDate.now());
-        return toResponse(repository.save(entity));
+        Athlete saved = repository.save(entity);
+        notifications.notifyRoles(saved.getOrganizationId(), java.util.List.of(com.dev.sports_club.entity.AppUserRole.Admin), com.dev.sports_club.entity.NotificationKind.athlete,
+                "New athlete registered: " + saved.getFirstName() + " " + saved.getLastName() + ".", "/athletes/" + saved.getAthleteId(), "athlete-new:" + saved.getAthleteId());
+        return toResponse(saved);
     }
 
     public AthleteResponse update(Integer id, AthleteRequest request) {

@@ -17,6 +17,23 @@ export function errorMessage(err, fallback = 'Something went wrong. Please try a
   return fallback
 }
 
+const ORG_KEY = 'activeOrganizationId'
+
+export function getActiveOrganizationId() {
+  try { return localStorage.getItem(ORG_KEY) } catch { return null }
+}
+
+export function setActiveOrganizationId(id) {
+  try { if (id) localStorage.setItem(ORG_KEY, String(id)); else localStorage.removeItem(ORG_KEY) } catch { /* storage unavailable */ }
+}
+
+// A Super Admin works inside one organization at a time; the server reads it from this header.
+apiClient.interceptors.request.use((config) => {
+  const id = getActiveOrganizationId()
+  if (id) config.headers['X-Organization-Id'] = id
+  return config
+})
+
 // A 401 on anything except the sign-in calls means the session ended (timeout, logout in another
 // tab, or the account was deactivated). Tell the app so it can send the user back to sign in.
 apiClient.interceptors.response.use(

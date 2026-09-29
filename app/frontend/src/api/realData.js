@@ -150,7 +150,7 @@ export function competitionDetailOf(raw, id) {
   const c = competitionsOf(raw).find((x) => x.competitionId === Number(id))
   if (!c) return null
   const entries = raw.teamCompetitions.filter((tc) => tc.competitionId === c.competitionId).map((tc) => ({
-    team: ix.teams.get(tc.teamId)?.teamName || 'Unknown team', finalPosition: tc.finalPosition, points: tc.pointsScored, registrationDate: tc.registrationDate,
+    teamId: tc.teamId, team: ix.teams.get(tc.teamId)?.teamName || 'Unknown team', finalPosition: tc.finalPosition, points: tc.pointsScored, registrationDate: tc.registrationDate,
   })).sort((a, b) => (a.finalPosition ?? 99) - (b.finalPosition ?? 99))
   return { ...c, organizer: null, description: null, teams: entries.map((e) => e.team), entries, fixtures: [], fixturesAvailable: false }
 }

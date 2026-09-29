@@ -17,6 +17,7 @@ public class AppUserResponse {
     private AppUserRole role;
     private Integer coachId;
     private Integer athleteId;
+    private Integer organizationId;
     private Boolean isActive;
     private LocalDateTime lastLogin;
 }

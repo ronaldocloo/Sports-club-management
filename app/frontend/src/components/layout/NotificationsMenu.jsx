@@ -1,14 +1,15 @@
 import { useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Bell, CalendarDays, CreditCard, Building2, Trophy, UserPlus } from 'lucide-react'
 import { useNotifications } from './NotificationsContext'
 import useClickOutside from '../../hooks/useClickOutside'
 
-const icons = { membership: CreditCard, competition: Trophy, athlete: UserPlus, payment: CreditCard, facility: Building2, event: CalendarDays }
+const icons = { membership: CreditCard, competition: Trophy, athlete: UserPlus, payment: CreditCard, facility: Building2, event: CalendarDays, fixture: Trophy }
 
 function NotificationsMenu() {
   const [open, setOpen] = useState(false)
-  const { items, unread, markAllRead } = useNotifications()
+  const { items, unread, markAllRead, markRead } = useNotifications()
+  const navigate = useNavigate()
   const ref = useRef(null)
   useClickOutside(ref, () => setOpen(false))
 
@@ -32,12 +33,17 @@ function NotificationsMenu() {
             {items.slice(0, 6).map((n) => {
               const Icon = icons[n.kind] || Bell
               return (
-                <li key={n.id} className={`flex gap-3 px-4 py-3 ${n.unread ? 'bg-blue-50/40' : ''}`}>
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600"><Icon size={15} /></div>
-                  <div>
-                    <p className="text-sm text-gray-800">{n.text}</p>
-                    <p className="mt-0.5 text-xs text-gray-500">{n.time}</p>
-                  </div>
+                <li key={n.id} className={n.unread ? 'bg-blue-50/40' : ''}>
+                  <button
+                    onClick={() => { markRead(n.id); setOpen(false); if (n.link) navigate(n.link) }}
+                    className="flex w-full gap-3 px-4 py-3 text-left hover:bg-gray-50"
+                  >
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600"><Icon size={15} /></div>
+                    <div>
+                      <p className="text-sm text-gray-800">{n.text}</p>
+                      <p className="mt-0.5 text-xs text-gray-500">{n.time}</p>
+                    </div>
+                  </button>
                 </li>
               )
             })}

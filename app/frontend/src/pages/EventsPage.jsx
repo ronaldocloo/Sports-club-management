@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Clock, MapPin, Plus, UserRound, Users } from 'lucide-react'
-import { eventsAreDerived, getEvents } from '../api/operations'
+import { CalendarDays, Clock, MapPin, Plus, Trash2, UserRound, Users } from 'lucide-react'
+import { createEvent, deleteEvent, eventsAreDerived, getEvents } from '../api/operations'
+import { errorMessage, USE_MOCKS } from '../api/client'
+import { useAuth } from '../context/AuthContext'
+import { normalizeRole } from '../utils/permissions'
 import { TODAY_ISO } from '../utils/today'
 import useAsync from '../hooks/useAsync'
-import { Badge, Button, Card, CardSkeleton, EmptyState, ErrorState, Input, Modal, PageHeader, SearchInput, Select, StatCard, TableSkeleton, useToast } from '../components/ui'
+import { Badge, Button, Card, CardSkeleton, ConfirmDialog, EmptyState, ErrorState, Input, Modal, PageHeader, SearchInput, Select, StatCard, TableSkeleton, useToast } from '../components/ui'
 import { formatDate } from '../utils/format'
 
 const eventTypes = ['Training', 'Match', 'Competition', 'Awards', 'Team meeting', 'Workshop', 'Club event']
@@ -54,6 +57,10 @@ function EventsPage() {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const { push } = useToast()
+  const { user } = useAuth()
+  const role = normalizeRole(user?.role)
+  const canManage = !eventsAreDerived && (role === 'Admin' || role === 'SuperAdmin')
+  const [removing, setRemoving] = useState(null)
 
   useEffect(() => { if (data) setEvents(data) }, [data])
 
@@ -71,16 +78,33 @@ function EventsPage() {
     return [...map.entries()]
   }, [filtered])
 
-  function add(e) {
-    setEvents((l) => [...l, { id: Date.now(), participants: 0, status: 'Scheduled', ...e }])
-    setOpen(false)
-    push(`Event “${e.title}” added`)
+  async function add(e) {
+    try {
+      const created = await createEvent(e)
+      setEvents((l) => [...l, created])
+      setOpen(false)
+      push(`Event “${e.title}” added`)
+    } catch (err) {
+      push(errorMessage(err), 'error')
+    }
+  }
+
+  async function remove() {
+    const target = removing
+    setRemoving(null)
+    try {
+      await deleteEvent(target)
+      setEvents((l) => l.filter((x) => x.id !== target.id))
+      push('Event deleted')
+    } catch (err) {
+      push(errorMessage(err), 'error')
+    }
   }
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Operations" title="Events" description={eventsAreDerived ? 'Competitions and confirmed facility bookings, in date order.' : 'Training, matches, workshops and club events.'}
-        actions={!eventsAreDerived && <Button icon={Plus} onClick={() => setOpen(true)}>Add Event</Button>} />
+      <PageHeader eyebrow="Operations" title="Events" description="Club events, competitions and confirmed facility bookings, in date order."
+        actions={canManage && <Button icon={Plus} onClick={() => setOpen(true)}>Add Event</Button>} />
 
       {status === 'loading' && <><div className="grid gap-4 sm:grid-cols-3"><CardSkeleton /><CardSkeleton /><CardSkeleton /></div><TableSkeleton /></>}
       {status === 'error' && <ErrorState title="Couldn't load events" onRetry={reload} />}
@@ -107,7 +131,7 @@ function EventsPage() {
 
           {groups.length === 0 ? (
             <EmptyState icon={CalendarDays} title="No events found" description="There are currently no events matching your filters."
-              action={!eventsAreDerived && <Button icon={Plus} onClick={() => setOpen(true)}>Add Event</Button>} />
+              action={canManage && <Button icon={Plus} onClick={() => setOpen(true)}>Add Event</Button>} />
           ) : (
             <div className="space-y-6">
               {groups.map(([date, items]) => (
@@ -126,9 +150,13 @@ function EventsPage() {
                           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
                             <span className="inline-flex items-center gap-1"><MapPin size={12} /> {e.location}</span>
                             <span className="inline-flex items-center gap-1"><UserRound size={12} /> {e.organizer}</span>
-                            <span className="inline-flex items-center gap-1"><Users size={12} /> {e.participants} participants</span>
+                            {e.participants > 0 && <span className="inline-flex items-center gap-1"><Users size={12} /> {e.participants} participants</span>}
+                            {e.source && e.source !== 'event' && <span className="text-gray-400">from {e.source === 'competition' ? 'competitions' : 'bookings'}</span>}
                           </div>
                         </div>
+                        {canManage && (e.source === 'event' || (USE_MOCKS && !e.source)) && (
+                          <button aria-label={`Delete ${e.title}`} onClick={() => setRemoving(e)} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-600"><Trash2 size={16} /></button>
+                        )}
                       </Card>
                     ))}
                   </div>
@@ -139,6 +167,7 @@ function EventsPage() {
         </>
       )}
 
+      <ConfirmDialog open={!!removing} danger title="Delete this event?" description="This action cannot be undone." confirmLabel="Delete Event" onConfirm={remove} onCancel={() => setRemoving(null)} />
       <EventModal open={open} onClose={() => setOpen(false)} onSave={add} />
     </div>
   )

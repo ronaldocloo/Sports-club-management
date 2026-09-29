@@ -4,6 +4,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -21,6 +23,12 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
+    /** A Super Admin can do everything an Admin can. */
+    @Bean
+    public RoleHierarchy roleHierarchy() {
+        return RoleHierarchyImpl.fromHierarchy("ROLE_SuperAdmin > ROLE_Admin");
+    }
+
     @Bean
     public SecurityContextRepository securityContextRepository() {
         return new HttpSessionSecurityContextRepository();
@@ -36,6 +44,11 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login").permitAll()
+
+                        // platform level: only a Super Admin manages organizations
+                        .requestMatchers("/api/organizations/**").hasRole("SuperAdmin")
+                        .requestMatchers(HttpMethod.GET, "/api/organization").authenticated()
+                        .requestMatchers("/api/organization").hasRole("Admin")
 
                         // membership_type: front_desk SELECT only, admin full (per Ronald's grants)
                         .requestMatchers(HttpMethod.GET, "/api/membership-types/**").hasAnyRole("Admin", "FrontDesk", "Athlete")
@@ -89,6 +102,26 @@ public class SecurityConfig {
                         // team_roster: coach SELECT only, admin full
                         .requestMatchers(HttpMethod.GET, "/api/team-rosters/**").hasAnyRole("Admin", "Coach", "Athlete")
                         .requestMatchers("/api/team-rosters/**").hasRole("Admin")
+
+                        // fixtures: everyone signed in can read; Coaches may record results for their own teams
+                        .requestMatchers(HttpMethod.GET, "/api/fixtures/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/fixtures/*/result").hasAnyRole("Admin", "Coach")
+                        .requestMatchers("/api/fixtures/**").hasRole("Admin")
+
+                        // attendance and training sessions: Admin and Coach manage; Athletes read their own
+                        .requestMatchers("/api/training-sessions/**").hasAnyRole("Admin", "Coach")
+                        .requestMatchers(HttpMethod.GET, "/api/attendance/**").hasAnyRole("Admin", "Coach", "Athlete")
+
+                        // performance records
+                        .requestMatchers(HttpMethod.GET, "/api/performance/**").hasAnyRole("Admin", "Coach", "Athlete")
+                        .requestMatchers("/api/performance/**").hasAnyRole("Admin", "Coach")
+
+                        // events, notifications, audit log, jobs
+                        .requestMatchers(HttpMethod.GET, "/api/events/**").authenticated()
+                        .requestMatchers("/api/events/**").hasRole("Admin")
+                        .requestMatchers("/api/notifications/**").authenticated()
+                        .requestMatchers("/api/audit-logs/**").hasRole("Admin")
+                        .requestMatchers("/api/admin/jobs/**").hasRole("Admin")
 
                         // user management: admin only, always
                         .requestMatchers("/api/users/**").hasRole("Admin")

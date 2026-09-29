@@ -1,10 +1,10 @@
 import apiClient, { USE_MOCKS } from './client'
 import { invalidate, loadAll, raw } from './raw'
-import { activityOf, bookingsOf, eventsOf, facilitiesOf, membersOf, notificationsOf, paymentsOf, plansOf, revenueByMonthOf, slotFromLabel, slotLabel, SLOT_KEYS } from './realData'
+import { activityOf, bookingsOf, eventsOf, facilitiesOf, membersOf, paymentsOf, plansOf, revenueByMonthOf, slotFromLabel, slotLabel, SLOT_KEYS } from './realData'
 import { initialBookings, initialEvents, initialFacilities, initialPayments, initialPlans, timeSlots } from '../mocks/operationsData'
 import { initialUsers } from '../mocks/usersData'
 import { auditLog } from '../mocks/auditData'
-import { notifications as demoNotifications, revenueByMonth as demoRevenue } from '../mocks/demoData'
+import { revenueByMonth as demoRevenue } from '../mocks/demoData'
 import { mockAthletes } from '../mocks/mockData'
 import { membershipFor } from '../mocks/athleteData'
 import { TODAY_ISO } from '../utils/today'
@@ -142,12 +142,38 @@ export async function cancelBooking(booking) {
 }
 
 // ---------- events ----------
+const EVENT_LABEL = { TeamMeeting: 'Team meeting', ClubEvent: 'Club event' }
+const EVENT_KEY = { 'Team meeting': 'TeamMeeting', 'Club event': 'ClubEvent' }
+
+const eventRow = (e) => ({
+  id: `e${e.eventId}`, eventId: e.eventId, source: 'event', title: e.title, type: EVENT_LABEL[e.eventType] || e.eventType, date: e.eventDate,
+  time: e.startTime ? String(e.startTime).slice(0, 5) : '—', location: e.location || '—', organizer: e.organizer || '—', participants: 0,
+  status: e.status, description: e.description,
+})
+
 export async function getEvents() {
   if (USE_MOCKS) { await delay(); return clone(initialEvents) }
-  return eventsOf(await loadAll())
+  // Real events, plus competitions and confirmed facility bookings shown on the same calendar.
+  const [{ data: real }, derived] = await Promise.all([apiClient.get('/events'), loadAll()])
+  return [...real.map(eventRow), ...eventsOf(derived).map((e) => ({ ...e, source: String(e.id).startsWith('c') ? 'competition' : 'booking' }))]
 }
 
-export const eventsAreDerived = !USE_MOCKS // real events come from competitions and bookings
+// The Events page can add and remove events in demo mode and (as an Admin) against the real API.
+export const eventsAreDerived = false
+
+export async function createEvent(v) {
+  if (USE_MOCKS) return { id: Date.now(), participants: 0, status: 'Scheduled', source: 'event', ...v }
+  const { data } = await apiClient.post('/events', {
+    title: v.title, eventType: EVENT_KEY[v.type] || v.type, eventDate: v.date, startTime: v.time ? `${v.time}:00` : null,
+    location: v.location || null, organizer: v.organizer || null,
+  })
+  return eventRow(data)
+}
+
+export async function deleteEvent(event) {
+  if (USE_MOCKS) return
+  await apiClient.delete(`/events/${event.eventId}`)
+}
 
 // ---------- users ----------
 const userRow = (u) => ({ id: u.userId, name: u.username, username: u.username, email: '', role: u.role, active: u.isActive, lastLogin: u.lastLogin, coachId: u.coachId, athleteId: u.athleteId })
@@ -186,15 +212,11 @@ export async function updateUser(user, changes) {
 }
 
 // ---------- audit log, notifications, activity ----------
-// The backend has no audit table yet, so real mode has no audit entries.
+// Real entries come from the server's audit trail; each one is a ready-made sentence.
 export async function getAuditLog() {
   if (USE_MOCKS) return auditLog
-  return []
-}
-
-export async function getNotifications() {
-  if (USE_MOCKS) return demoNotifications
-  return notificationsOf(await loadAll())
+  const { data } = await apiClient.get('/audit-logs', { params: { limit: 300 } })
+  return data.map((a) => ({ id: a.auditId, actor: '', action: '', target: a.description, text: a.description, kind: a.entityType || String(a.action).toLowerCase().replace('_', ' '), time: a.createdAt, username: a.username }))
 }
 
 export async function getRecentActivity() {
