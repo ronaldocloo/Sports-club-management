@@ -10,14 +10,14 @@ export const ROLE_LABELS = {
 
 const ALL = [
   '/', '/athletes', '/coaches', '/teams', '/competitions', '/sports', '/memberships', '/payments',
-  '/facilities', '/bookings', '/events', '/attendance', '/analytics', '/reports', '/users', '/notifications', '/settings',
+  '/facilities', '/bookings', '/events', '/attendance', '/analytics', '/intelligence', '/reports', '/users', '/notifications', '/settings',
 ]
 
 const ACCESS = {
   SuperAdmin: [...ALL, '/organizations'],
   Admin: ALL,
   Coach: ['/', '/athletes', '/teams', '/competitions', '/events', '/attendance', '/reports', '/notifications', '/settings'],
-  FrontDesk: ['/', '/athletes', '/memberships', '/payments', '/facilities', '/bookings', '/events', '/reports', '/notifications', '/settings'],
+  FrontDesk: ['/', '/athletes', '/memberships', '/payments', '/facilities', '/bookings', '/events', '/intelligence', '/reports', '/notifications', '/settings'],
   Athlete: ['/me', '/competitions', '/events', '/notifications', '/settings'],
 }
 

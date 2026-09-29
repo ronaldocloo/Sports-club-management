@@ -25,6 +25,7 @@ import BookingsPage from "./pages/BookingsPage";
 import EventsPage from "./pages/EventsPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import ReportsPage from "./pages/ReportsPage";
+import IntelligencePage from "./pages/IntelligencePage";
 import AttendancePage from "./pages/AttendancePage";
 import OrganizationsPage from "./pages/OrganizationsPage";
 
@@ -58,6 +59,7 @@ function App() {
           <Route path="/attendance" element={<RequireAuth><AttendancePage /></RequireAuth>} />
           <Route path="/organizations" element={<RequireAuth><OrganizationsPage /></RequireAuth>} />
           <Route path="/analytics" element={<RequireAuth><AnalyticsPage /></RequireAuth>} />
+          <Route path="/intelligence" element={<RequireAuth><IntelligencePage /></RequireAuth>} />
           <Route path="/reports" element={<RequireAuth><ReportsPage /></RequireAuth>} />
 
           <Route path="/sports" element={<RequireAuth><SportsPage /></RequireAuth>} />

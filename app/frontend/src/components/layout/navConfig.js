@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, UserCog, Shield, Trophy, Layers, CreditCard, Wallet,
-  Building2, CalendarCheck, UserCircle, ClipboardCheck, Landmark, CalendarDays, BarChart3, FileText, UserRound, Bell, Settings,
+  Building2, CalendarCheck, UserCircle, ClipboardCheck, Landmark, Sparkles, CalendarDays, BarChart3, FileText, UserRound, Bell, Settings,
 } from 'lucide-react'
 
 export const navGroups = [
@@ -30,6 +30,7 @@ export const navGroups = [
     label: 'Insights',
     items: [
       { name: 'Analytics', path: '/analytics', icon: BarChart3 },
+      { name: 'Intelligence', path: '/intelligence', icon: Sparkles },
       { name: 'Reports', path: '/reports', icon: FileText },
     ],
   },

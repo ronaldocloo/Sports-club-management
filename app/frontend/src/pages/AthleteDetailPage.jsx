@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Activity, ArrowLeft, Plus, CalendarCheck, CreditCard, Lightbulb, Mail, Ruler, Shield, Trophy, UserCog, Users, Weight, Cake } from 'lucide-react'
 import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { getAthleteProfile } from '../api/athletes'
+import { getAthleteInsight } from '../api/intelligence'
 import { recordPerformance, statPresets } from '../api/performance'
 import { errorMessage } from '../api/client'
 import { useAuth } from '../context/AuthContext'
@@ -106,6 +107,7 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
   const [p, setP] = useState(null)
   const [status, setStatus] = useState('loading')
   const [recording, setRecording] = useState(false)
+  const [insight, setInsight] = useState(null)
   const { user, demoMode } = useAuth()
   const { push } = useToast()
   const role = normalizeRole(user?.role)
@@ -117,6 +119,10 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
   }, [athleteId])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    setInsight(null)
+    getAthleteInsight(athleteId).then(setInsight).catch(() => setInsight(null))
+  }, [athleteId])
 
   const back = portal ? null : (
     <Link to="/athletes" className="inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-900">
@@ -146,7 +152,11 @@ function AthleteDetailPage({ athleteId: fixedId, portal = false }) {
   const name = `${p.firstName} ${p.lastName}`
   const m = p.membership ? membershipState(p.membership) : null
   const pie = p.attendance ? Object.entries(p.attendance.counts).map(([k, v]) => ({ name: k, value: v })) : []
-  const insights = buildInsights(p)
+  // The server explains trends in ratings and attendance; membership notes come from the profile itself.
+  const local = buildInsights(p)
+  const insights = insight
+    ? [...insight.highlights.filter((h) => !h.startsWith('There is not enough')), ...local.filter((i) => /embership/.test(i))]
+    : local
   const winRate = p.performance?.gamesPlayed ? Math.round((p.performance.wins / p.performance.gamesPlayed) * 100) : 0
 
   return (
