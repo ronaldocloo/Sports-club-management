@@ -1,5 +1,6 @@
 package com.dev.sports_club.config;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -8,6 +9,7 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 
@@ -25,8 +27,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, ActiveUserFilter activeUserFilter) throws Exception {
         http
+                .addFilterAfter(activeUserFilter, SecurityContextHolderFilter.class)
                 // REST API consumed by a separate React frontend, not a server-rendered
                 // HTML form — CSRF protection is designed for the latter, so it's disabled here.
                 .csrf(csrf -> csrf.disable())
@@ -35,21 +38,21 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login").permitAll()
 
                         // membership_type: front_desk SELECT only, admin full (per Ronald's grants)
-                        .requestMatchers(HttpMethod.GET, "/api/membership-types/**").hasAnyRole("Admin", "FrontDesk")
+                        .requestMatchers(HttpMethod.GET, "/api/membership-types/**").hasAnyRole("Admin", "FrontDesk", "Athlete")
                         .requestMatchers("/api/membership-types/**").hasRole("Admin")
 
                         // sport: coach SELECT only, admin full
-                        .requestMatchers(HttpMethod.GET, "/api/sports/**").hasAnyRole("Admin", "Coach")
+                        .requestMatchers(HttpMethod.GET, "/api/sports/**").hasAnyRole("Admin", "Coach", "Athlete")
                         .requestMatchers("/api/sports/**").hasRole("Admin")
 
                         // athlete: front_desk SELECT/INSERT/UPDATE, coach SELECT, admin full
-                        .requestMatchers(HttpMethod.GET, "/api/athletes/**").hasAnyRole("Admin", "FrontDesk", "Coach")
+                        .requestMatchers(HttpMethod.GET, "/api/athletes/**").hasAnyRole("Admin", "FrontDesk", "Coach", "Athlete")
                         .requestMatchers(HttpMethod.POST, "/api/athletes/**").hasAnyRole("Admin", "FrontDesk")
                         .requestMatchers(HttpMethod.PUT, "/api/athletes/**").hasAnyRole("Admin", "FrontDesk")
                         .requestMatchers("/api/athletes/**").hasRole("Admin")
 
                         // coach: coach-role SELECT only, admin full
-                        .requestMatchers(HttpMethod.GET, "/api/coaches/**").hasAnyRole("Admin", "Coach")
+                        .requestMatchers(HttpMethod.GET, "/api/coaches/**").hasAnyRole("Admin", "Coach", "Athlete")
                         .requestMatchers("/api/coaches/**").hasRole("Admin")
 
                         // facility, competition, facility_booking, team_competition: not addressed
@@ -68,30 +71,38 @@ public class SecurityConfig {
                         .requestMatchers("/api/team-competitions/**").hasRole("Admin")
 
                         // membership: front_desk SELECT/INSERT/UPDATE, admin full, coach none
-                        .requestMatchers(HttpMethod.GET, "/api/memberships/**").hasAnyRole("Admin", "FrontDesk")
+                        .requestMatchers(HttpMethod.GET, "/api/memberships/**").hasAnyRole("Admin", "FrontDesk", "Athlete")
                         .requestMatchers(HttpMethod.POST, "/api/memberships/**").hasAnyRole("Admin", "FrontDesk")
                         .requestMatchers(HttpMethod.PUT, "/api/memberships/**").hasAnyRole("Admin", "FrontDesk")
                         .requestMatchers("/api/memberships/**").hasRole("Admin")
 
                         // team: coach SELECT only, admin full
-                        .requestMatchers(HttpMethod.GET, "/api/teams/**").hasAnyRole("Admin", "Coach")
+                        .requestMatchers(HttpMethod.GET, "/api/teams/**").hasAnyRole("Admin", "Coach", "Athlete")
                         .requestMatchers("/api/teams/**").hasRole("Admin")
 
                         // payment: front_desk SELECT/INSERT only (no UPDATE — Completed
                         // payments must not be alterable), admin full, coach none
-                        .requestMatchers(HttpMethod.GET, "/api/payments/**").hasAnyRole("Admin", "FrontDesk")
+                        .requestMatchers(HttpMethod.GET, "/api/payments/**").hasAnyRole("Admin", "FrontDesk", "Athlete")
                         .requestMatchers(HttpMethod.POST, "/api/payments/**").hasAnyRole("Admin", "FrontDesk")
                         .requestMatchers("/api/payments/**").hasRole("Admin")
 
                         // team_roster: coach SELECT only, admin full
-                        .requestMatchers(HttpMethod.GET, "/api/team-rosters/**").hasAnyRole("Admin", "Coach")
+                        .requestMatchers(HttpMethod.GET, "/api/team-rosters/**").hasAnyRole("Admin", "Coach", "Athlete")
                         .requestMatchers("/api/team-rosters/**").hasRole("Admin")
 
                         // user management: admin only, always
                         .requestMatchers("/api/users/**").hasRole("Admin")
 
                         .anyRequest().authenticated()
-                );
+                )
+                // Unauthenticated (or expired-session) requests get a clean 401 the frontend can react to,
+                // instead of Spring's default 403.
+                .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, authException) -> {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write(
+                            "{\"status\":401,\"error\":\"Unauthorized\",\"message\":\"Please sign in to continue\"}");
+                }));
         return http.build();
     }
 }

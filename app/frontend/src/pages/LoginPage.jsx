@@ -1,16 +1,20 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Trophy, Users, BarChart3, CalendarCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { Button, Input, Modal } from '../components/ui'
+import { canAccess, homeFor } from '../utils/permissions'
+import { errorMessage } from '../api/client'
 
 function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const { login } = useAuth()
+  const { login, user, sessionExpired } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = location.state?.from
   const [forgot, setForgot] = useState(false)
   const [sent, setSent] = useState(false)
 
@@ -19,10 +23,10 @@ function LoginPage() {
     setError('')
     setSubmitting(true)
     try {
-      await login(username, password)
-      navigate('/')
-    } catch {
-      setError('Invalid username or password. Please try again.')
+      const signedIn = await login(username, password)
+      navigate(from && canAccess(signedIn.role, from.split('?')[0]) ? from : homeFor(signedIn.role), { replace: true })
+    } catch (e) {
+      setError(e?.response?.status === 401 ? 'Invalid username or password. If you are sure they are right, your account may be deactivated.' : errorMessage(e, 'We could not sign you in. Please try again.'))
     } finally {
       setSubmitting(false)
     }
@@ -33,6 +37,8 @@ function LoginPage() {
     { icon: CalendarCheck, text: 'Schedule competitions and facilities' },
     { icon: BarChart3, text: 'Track payments and performance' },
   ]
+
+  if (user && !submitting) return <Navigate to={from || homeFor(user.role)} replace />
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
@@ -58,6 +64,9 @@ function LoginPage() {
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-bold text-gray-900">Welcome back</h2>
           <p className="mt-1 text-sm text-gray-500">Sign in to your organization</p>
+          {sessionExpired && !error && (
+            <p role="status" className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Your session has ended. Please sign in again.</p>
+          )}
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <Input label="Username" required value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
             <Input label="Password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />

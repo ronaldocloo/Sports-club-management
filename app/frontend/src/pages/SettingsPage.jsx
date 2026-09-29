@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Check, Search } from 'lucide-react'
 import { getAuditLog } from '../api/operations'
+import { changePassword } from '../api/auth'
+import { errorMessage, USE_MOCKS } from '../api/client'
 import useAsync from '../hooks/useAsync'
 import { demoOrganizations } from '../mocks/usersData'
 import { organization } from '../mocks/demoData'
@@ -50,14 +52,27 @@ function ProfileTab() {
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' })
   const [errors, setErrors] = useState({})
   const set = (k) => (e) => setPw((s) => ({ ...s, [k]: e.target.value }))
-  function change(e) {
+  const [saving, setSaving] = useState(false)
+  async function change(e) {
     e.preventDefault()
     const err = {}
     if (!pw.current) err.current = 'Enter your current password.'
     if (pw.next.length < 8) err.next = 'Use at least 8 characters.'
+    else if (pw.next === pw.current) err.next = 'Choose a password different from the current one.'
     if (pw.confirm !== pw.next) err.confirm = 'Passwords do not match.'
     setErrors(err)
-    if (!Object.keys(err).length) { push('Password updated (demo: not sent to the server)'); setPw({ current: '', next: '', confirm: '' }) }
+    if (Object.keys(err).length) return
+    if (USE_MOCKS) { push('Password updated (demo: not sent to the server)'); setPw({ current: '', next: '', confirm: '' }); return }
+    setSaving(true)
+    try {
+      await changePassword(pw.current, pw.next)
+      push('Password updated')
+      setPw({ current: '', next: '', confirm: '' })
+    } catch (e2) {
+      setErrors({ submit: errorMessage(e2) })
+    } finally {
+      setSaving(false)
+    }
   }
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -75,7 +90,8 @@ function ProfileTab() {
           <Input label="Current password" type="password" required value={pw.current} onChange={set('current')} error={errors.current} autoComplete="current-password" />
           <Input label="New password" type="password" required value={pw.next} onChange={set('next')} error={errors.next} autoComplete="new-password" />
           <Input label="Confirm new password" type="password" required value={pw.confirm} onChange={set('confirm')} error={errors.confirm} autoComplete="new-password" />
-          <div className="flex justify-end"><Button type="submit">Update password</Button></div>
+          {errors.submit && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{errors.submit}</p>}
+          <div className="flex justify-end"><Button type="submit" loading={saving}>Update password</Button></div>
         </form>
       </Card>
     </div>

@@ -1,6 +1,8 @@
 package com.dev.sports_club.controller;
 
 import com.dev.sports_club.dto.AppUserResponse;
+import com.dev.sports_club.dto.ChangePasswordRequest;
+import com.dev.sports_club.service.AppUserService;
 import com.dev.sports_club.dto.LoginRequest;
 import com.dev.sports_club.entity.AppUser;
 import com.dev.sports_club.repository.AppUserRepository;
@@ -27,12 +29,18 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository securityContextRepository;
     private final AppUserRepository appUserRepository;
+    private final AppUserService appUserService;
 
     @PostMapping("/login")
     public AppUserResponse login(@Valid @RequestBody LoginRequest request,
                                   HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
+
+        // Issue a fresh session id on login so a pre-login session id can never be reused (session fixation).
+        if (httpRequest.getSession(false) != null) {
+            httpRequest.changeSessionId();
+        }
 
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
@@ -55,6 +63,12 @@ public class AuthController {
         }
     }
 
+    @PostMapping("/change-password")
+    public void changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        appUserService.changePassword(username, request);
+    }
+
     @GetMapping("/me")
     public AppUserResponse me() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -69,6 +83,7 @@ public class AuthController {
                 user.getUsername(),
                 user.getRole(),
                 user.getCoachId(),
+                user.getAthleteId(),
                 user.getIsActive(),
                 user.getLastLogin()
         );

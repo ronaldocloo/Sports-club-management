@@ -47,3 +47,35 @@ The `?` is the authenticated user’s `coach_id`, obtained from the server-side 
 ## BR7 coverage
 
 BR7 requires that only staff and administrators modify payment and membership status. The database grants give `front_desk` the ability to record a payment and manage membership records, while `admin` retains full access. `coach` receives no write permissions and no financial-table access. A front-desk account has no direct `UPDATE` on `payment`, so it cannot alter a completed payment. Application role checks must mirror this before rendering forms or accepting requests.
+
+
+## Phase 3 additions: sessions, roles and data scoping
+
+Apply `schema/04_phase3_auth.sql` (adds the `Athlete` role and `app_user.athlete_id`). It is additive and safe to re-run.
+
+### Roles
+
+| Role | Sees | Can change |
+|---|---|---|
+| `Admin` | Everything | Everything, including users |
+| `FrontDesk` | Athletes, memberships, payments, bookings, competitions | Athletes, memberships; new payments only |
+| `Coach` | Only the teams they coach (`app_user.coach_id`) and the athletes on those teams | Nothing |
+| `Athlete` | Only their own athlete record (`app_user.athlete_id`), memberships, payments and teams | Their own password |
+
+Coach and Athlete scoping is enforced by the API (`AccessScope`), not just hidden in the UI: list endpoints return
+only visible rows and single-record requests for anything else return 403.
+
+### Sessions
+
+- Cookie-based server sessions: `HttpOnly`, `SameSite=Lax`, 30 minutes of inactivity.
+- A new session id is issued on login (prevents session fixation).
+- Unauthenticated or expired requests get **401** (the frontend then returns the user to the login page).
+- `ActiveUserFilter` re-checks the account on every request. Deactivating a user, deleting them, or changing their role
+  ends their open session immediately.
+
+### Account management rules
+
+- Passwords are bcrypt-hashed. Users change their own password with `POST /api/auth/change-password`
+  (current password required). Admins can reset a password by sending `password` on `PUT /api/users/{id}`; omit it to keep the current one.
+- An Admin cannot deactivate, delete, or change the role of their own account, and the last active Admin cannot be removed.
+- Usernames are unique; Coach and Athlete accounts must be linked to a coach/athlete record.

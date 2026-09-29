@@ -1,5 +1,6 @@
 package com.dev.sports_club.controller;
 
+import com.dev.sports_club.service.AccessScope;
 import com.dev.sports_club.dto.PaymentRequest;
 import com.dev.sports_club.dto.PaymentResponse;
 import com.dev.sports_club.service.PaymentService;
@@ -16,15 +17,19 @@ import java.util.List;
 public class PaymentController {
 
     private final PaymentService service;
+    private final AccessScope scope;
 
     @GetMapping
     public List<PaymentResponse> findAll() {
-        return service.findAll();
+        var visible = scope.current();
+        return service.findAll().stream().filter(p -> visible.membership(p.getMembershipId())).toList();
     }
 
     @GetMapping("/{id}")
     public PaymentResponse findById(@PathVariable Integer id) {
-        return service.findById(id);
+        var payment = service.findById(id);
+        scope.current().requireMembership(payment.getMembershipId());
+        return payment;
     }
 
     @PostMapping

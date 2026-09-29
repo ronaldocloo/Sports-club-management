@@ -34,6 +34,9 @@ public class AppUser {
     @Column(name = "coach_id")
     private Integer coachId;
 
+    @Column(name = "athlete_id")
+    private Integer athleteId;
+
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
 

@@ -30,6 +30,7 @@ Requires MariaDB (XAMPP or standalone).
 mysql -u root -p < schema/01_create_database.sql
 mysql -u root -p sports_club < schema/02_tables.sql
 mysql -u root -p sports_club < data/01_seed.sql
+mysql -u root -p sports_club < schema/04_phase3_auth.sql   # Athlete role + account linking (safe to re-run)
 ```
 
 Copy `.env.example` to `.env` and fill in local credentials. Never commit `.env`.

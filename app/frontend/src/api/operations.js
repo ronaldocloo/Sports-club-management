@@ -150,17 +150,39 @@ export async function getEvents() {
 export const eventsAreDerived = !USE_MOCKS // real events come from competitions and bookings
 
 // ---------- users ----------
+const userRow = (u) => ({ id: u.userId, name: u.username, username: u.username, email: '', role: u.role, active: u.isActive, lastLogin: u.lastLogin, coachId: u.coachId, athleteId: u.athleteId })
+
 export async function getUsers() {
   if (USE_MOCKS) { await delay(); return initialUsers.map((u) => ({ ...u })) }
-  const list = await raw.users()
-  return list.map((u) => ({ id: u.userId, name: u.username, username: u.username, email: '', role: u.role, active: u.isActive, lastLogin: u.lastLogin, coachId: u.coachId }))
+  invalidate()
+  return (await raw.users()).map(userRow)
 }
 
 export async function createUser(v) {
   if (USE_MOCKS) return { id: Date.now(), ...v, active: true, lastLogin: null }
-  const { data } = await apiClient.post('/users', { username: v.username, password: v.password, role: v.role, coachId: v.coachId ? Number(v.coachId) : null, isActive: true })
+  const { data } = await apiClient.post('/users', {
+    username: v.username, password: v.password, role: v.role,
+    coachId: v.role === 'Coach' && v.coachId ? Number(v.coachId) : null,
+    athleteId: v.role === 'Athlete' && v.athleteId ? Number(v.athleteId) : null,
+    isActive: true,
+  })
   invalidate()
-  return { id: data.userId, name: data.username, username: data.username, email: '', role: data.role, active: data.isActive, lastLogin: data.lastLogin, coachId: data.coachId }
+  return userRow(data)
+}
+
+// changes: any of { role, coachId, athleteId, active, password }. Omit password to keep the current one.
+export async function updateUser(user, changes) {
+  if (USE_MOCKS) { await delay(150); const rest = { ...changes }; delete rest.password; return { ...user, ...rest } }
+  const next = { ...user, ...changes }
+  const { data } = await apiClient.put(`/users/${user.id}`, {
+    username: user.username, role: next.role,
+    coachId: next.role === 'Coach' && next.coachId ? Number(next.coachId) : null,
+    athleteId: next.role === 'Athlete' && next.athleteId ? Number(next.athleteId) : null,
+    isActive: next.active,
+    ...(changes.password ? { password: changes.password } : {}),
+  })
+  invalidate()
+  return userRow(data)
 }
 
 // ---------- audit log, notifications, activity ----------

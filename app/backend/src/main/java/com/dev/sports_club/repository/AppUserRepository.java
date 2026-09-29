@@ -9,4 +9,6 @@ import java.util.Optional;
 @Repository
 public interface AppUserRepository extends JpaRepository<AppUser, Integer> {
     Optional<AppUser> findByUsername(String username);
+
+    long countByRoleAndIsActive(com.dev.sports_club.entity.AppUserRole role, Boolean isActive);
 }

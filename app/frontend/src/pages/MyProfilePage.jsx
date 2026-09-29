@@ -1,9 +1,24 @@
+import { UserX } from 'lucide-react'
 import AthleteDetailPage from './AthleteDetailPage'
+import { EmptyState } from '../components/ui'
+import { useAuth } from '../context/AuthContext'
 
-// Athlete portal. Demo: shows athlete #1. With the real backend this should resolve the
-// athlete linked to the signed-in user account.
+// The signed-in athlete's own profile. The account is linked to an athlete record by the backend
+// (app_user.athlete_id); in demo mode it shows the first sample athlete.
 function MyProfilePage() {
-  return <AthleteDetailPage athleteId={1} portal />
+  const { user, demoMode } = useAuth()
+  const athleteId = demoMode ? 1 : user?.athleteId
+
+  if (!athleteId) {
+    return (
+      <EmptyState
+        icon={UserX}
+        title="Your account isn't linked to an athlete"
+        description="Ask a club administrator to link your account to your athlete record."
+      />
+    )
+  }
+  return <AthleteDetailPage athleteId={athleteId} portal />
 }
 
 export default MyProfilePage

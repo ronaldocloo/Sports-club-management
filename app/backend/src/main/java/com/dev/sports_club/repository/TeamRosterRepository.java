@@ -7,4 +7,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface TeamRosterRepository extends JpaRepository<TeamRoster, TeamRosterId> {
+
+    java.util.List<TeamRoster> findByIdAthleteId(Integer athleteId);
+
+    java.util.List<TeamRoster> findByIdTeamIdIn(java.util.Collection<Integer> teamIds);
 }

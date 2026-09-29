@@ -13,3 +13,7 @@ export async function getCurrentUser() {
   const response = await apiClient.get('/auth/me')
   return response.data
 }
+
+export async function changePassword(currentPassword, newPassword) {
+  await apiClient.post('/auth/change-password', { currentPassword, newPassword })
+}

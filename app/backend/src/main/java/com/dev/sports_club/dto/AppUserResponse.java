@@ -16,6 +16,7 @@ public class AppUserResponse {
     private String username;
     private AppUserRole role;
     private Integer coachId;
+    private Integer athleteId;
     private Boolean isActive;
     private LocalDateTime lastLogin;
 }

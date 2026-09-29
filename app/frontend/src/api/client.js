@@ -17,4 +17,17 @@ export function errorMessage(err, fallback = 'Something went wrong. Please try a
   return fallback
 }
 
+// A 401 on anything except the sign-in calls means the session ended (timeout, logout in another
+// tab, or the account was deactivated). Tell the app so it can send the user back to sign in.
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const url = error?.config?.url || ''
+    if (error?.response?.status === 401 && !url.includes('/auth/login') && !url.includes('/auth/me')) {
+      window.dispatchEvent(new CustomEvent('auth:expired'))
+    }
+    return Promise.reject(error)
+  },
+)
+
 export default apiClient
