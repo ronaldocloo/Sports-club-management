@@ -1,5 +1,6 @@
 import apiClient, { USE_MOCKS } from './client'
 import { mockAthletes } from '../mocks/mockData'
+import { buildAthleteProfile } from '../mocks/athleteData'
 
 export async function getAthletes() {
   if (USE_MOCKS) {
@@ -15,4 +16,11 @@ export async function getAthleteById(athleteId) {
   }
   const response = await apiClient.get(`/athletes/${athleteId}`)
   return response.data
+}
+
+// Athlete plus attendance/performance/membership. Extras are sample data until the backend provides them.
+export async function getAthleteProfile(athleteId) {
+  const athlete = await getAthleteById(athleteId)
+  if (!athlete) return null
+  return buildAthleteProfile(athlete)
 }
