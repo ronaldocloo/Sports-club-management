@@ -16,8 +16,8 @@ const ALL = [
 const ACCESS = {
   SuperAdmin: [...ALL, '/organizations'],
   Admin: ALL,
-  Coach: ['/', '/athletes', '/teams', '/competitions', '/events', '/attendance', '/notifications', '/settings'],
-  FrontDesk: ['/', '/athletes', '/memberships', '/payments', '/facilities', '/bookings', '/events', '/notifications', '/settings'],
+  Coach: ['/', '/athletes', '/teams', '/competitions', '/events', '/attendance', '/reports', '/notifications', '/settings'],
+  FrontDesk: ['/', '/athletes', '/memberships', '/payments', '/facilities', '/bookings', '/events', '/reports', '/notifications', '/settings'],
   Athlete: ['/me', '/competitions', '/events', '/notifications', '/settings'],
 }
 

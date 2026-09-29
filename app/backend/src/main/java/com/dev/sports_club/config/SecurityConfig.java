@@ -116,6 +116,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/performance/**").hasAnyRole("Admin", "Coach", "Athlete")
                         .requestMatchers("/api/performance/**").hasAnyRole("Admin", "Coach")
 
+                        // analytics overview is organization-wide, so Admin only; reports check the role per report type
+                        .requestMatchers("/api/analytics/**").hasRole("Admin")
+                        .requestMatchers(HttpMethod.GET, "/api/reports/**").hasAnyRole("Admin", "FrontDesk", "Coach")
+
                         // events, notifications, audit log, jobs
                         .requestMatchers(HttpMethod.GET, "/api/events/**").authenticated()
                         .requestMatchers("/api/events/**").hasRole("Admin")

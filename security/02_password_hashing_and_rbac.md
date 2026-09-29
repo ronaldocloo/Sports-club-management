@@ -115,3 +115,18 @@ delete through the API: who, what, which record, when. Admins read their own org
   that is not available.
 - Fixtures need two different teams registered in the competition; a coach can record results only for their own teams.
 - Attendance can only be marked for athletes on the team's active roster.
+
+
+## Phase 5 additions: analytics and report access
+
+| Endpoint | Who | Notes |
+|---|---|---|
+| `GET /api/analytics/overview` | Admin (and Super Admin inside an organization) | Organization-wide, including revenue, so not available to other roles |
+| `GET /api/reports/{athletes,memberships,financial}` | Admin, Front Desk | |
+| `GET /api/reports/{attendance,performance}` | Admin, Coach | A Coach only sees athletes on their own teams (same scoping as the rest of the API) |
+| `GET /api/reports/{facilities,competitions}` | Admin | |
+
+Downloads (`format=csv|xlsx|pdf`) are generated on the server from the caller's tenant-filtered data and written to the
+audit log (action `EXPORT`, with the report, format, period and row count). CSV cells that begin with `=`, `+`, `-` or
+`@` are prefixed with a quote so a spreadsheet does not run them as formulas. Ranges are limited (800 days for
+analytics, 5 years for reports) to keep requests bounded.

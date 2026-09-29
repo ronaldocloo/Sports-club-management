@@ -32,6 +32,7 @@ mysql -u root -p sports_club < schema/02_tables.sql
 mysql -u root -p sports_club < data/01_seed.sql
 mysql -u root -p sports_club < schema/04_phase3_auth.sql   # Athlete role + account linking (safe to re-run)
 mysql -u root -p sports_club < schema/05_phase4_platform.sql # organizations, fixtures, attendance, events, audit (safe to re-run)
+mysql -u root -p sports_club < schema/06_phase5_reporting.sql # report export audit action + indexes (safe to re-run)
 ```
 
 Copy `.env.example` to `.env` and fill in local credentials. Never commit `.env`.
@@ -78,6 +79,12 @@ organizations and works inside one at a time from the top bar. There is no Super
 INSERT INTO app_user (username, password_hash, role, organization_id, is_active)
 VALUES ('superadmin', '<bcrypt hash>', 'SuperAdmin', NULL, 1);
 ```
+
+**Analytics and reports.** `GET /api/analytics/overview?from=&to=` (Admin) aggregates KPIs for any date range up to 800
+days and compares each with the previous period of the same length, plus insights and an "attention" list.
+`GET /api/reports/{type}` builds seven reports (athletes, memberships, financial, attendance, performance, facilities,
+competitions) as JSON (preview) or as real CSV, `.xlsx` (Apache POI) and PDF (OpenPDF) files. Front Desk can run the
+first three, Coaches the attendance and performance reports for their own teams. Every export is written to the audit log.
 
 **Daily job.** At 06:00 server time the backend marks memberships past their end date as Expired and sends expiry
 warnings (an Admin can also trigger it: `POST /api/admin/jobs/run`, for their own organization only). Seed memberships

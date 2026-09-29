@@ -1,4 +1,4 @@
-import { USE_MOCKS } from './client'
+import apiClient, { USE_MOCKS } from './client'
 import { loadAll } from './raw'
 import { getAthleteDirectory, getAthleteGrowth } from './athletes'
 import { getCompetitions } from './competitions'
@@ -213,4 +213,64 @@ export async function getReports() {
     }),
   }
   return [athlete, financial, performance, facility]
+}
+
+
+// ---------- Analytics overview (Analytics page) ----------
+// Real mode: the server aggregates for any date range and compares with the previous period.
+// Demo mode: the same shape built from sample data (the range only changes the labels).
+const SEVERITY = { green: 'success', amber: 'warning', red: 'danger', blue: 'info' }
+
+async function demoOverview({ from, to }) {
+  const a = await getAnalytics()
+  const d = await collect()
+  const total = (m) => m.memberships + m.competitions + m.facilities + m.other
+  const rev = a.revenueByMonth
+  const monthKey = (i, base = 4) => `2026-${String(base + i).padStart(2, '0')}`
+  const growthKey = (i) => `2026-${String(1 + i).padStart(2, '0')}`
+  const active = a.membershipBreakdown.filter((m) => m.name === 'Active' || m.name === 'Expiring soon').reduce((s, m) => s + m.value, 0)
+  const metric = (value, previous) => ({ value, previous, changePct: previous ? Math.round(((value - previous) / previous) * 1000) / 10 : null })
+  const gender = {}
+  mockAthletes.forEach((x) => { gender[x.gender] = (gender[x.gender] || 0) + 1 })
+  const bands = { 'Under 18': 0, '18–21': 0, '22–25': 0, '26–30': 0, '31+': 0 }
+  mockAthletes.forEach((x) => {
+    const age = Math.floor((new Date(TODAY_ISO) - new Date(x.dateOfBirth)) / (365.25 * 86400000))
+    bands[age < 18 ? 'Under 18' : age <= 21 ? '18–21' : age <= 25 ? '22–25' : age <= 30 ? '26–30' : '31+']++
+  })
+  const methods = {}
+  d.payments.filter((p) => p.status === 'Paid').forEach((p) => { methods[p.method] = (methods[p.method] || 0) + p.amount })
+  const plans = {}
+  d.members.filter((m) => m.state.key === 'Active' || m.state.key === 'Expiring').forEach((m) => { plans[m.type] = (plans[m.type] || 0) + 1 })
+  const pending = d.payments.filter((p) => p.status === 'Pending')
+  return {
+    period: { from, to }, previous: { from, to },
+    kpis: {
+      revenue: metric(a.kpis.revenue, total(rev.at(-2))),
+      newAthletes: metric(a.athleteGrowth.at(-1).athletes - a.athleteGrowth.at(-2).athletes, a.athleteGrowth.at(-2).athletes - a.athleteGrowth.at(-3).athletes),
+      activeMemberships: metric(active, Math.round(active * 0.95)),
+      renewalRate: metric(71, 68), attendanceRate: metric(a.kpis.attendance ?? 0, (a.kpis.attendance ?? 0) - 2),
+      facilityUtilization: metric(a.kpis.utilization, Math.max(0, a.kpis.utilization - 4)), fixturesPlayed: metric(14, 6),
+    },
+    revenueByMonth: rev.map((m, i) => ({ month: monthKey(i), value: total(m) })),
+    athleteGrowth: a.athleteGrowth.map((m, i) => ({ month: growthKey(i), value: m.athletes })),
+    attendanceByMonth: [78, 81, 80, 84, 83, 85].map((v, i) => ({ month: monthKey(i), value: v })),
+    membershipStatus: a.membershipBreakdown.map((m) => ({ name: m.name, value: m.value })),
+    sports: a.sportCounts.map((x) => ({ name: x.name, value: x.value })),
+    gender: Object.entries(gender).map(([name, value]) => ({ name, value })),
+    ageBands: Object.entries(bands).map(([name, value]) => ({ name, value })),
+    paymentMethods: Object.entries(methods).map(([name, value]) => ({ name, value })),
+    plans: Object.entries(plans).map(([name, value]) => ({ name, value })),
+    facilities: d.facilities.map((f) => ({ facilityId: f.id, name: f.name, type: f.type, status: f.status, bookings: d.bookings.filter((b) => b.facilityId === f.id).length, utilization: f.utilization })),
+    heatmap: { days: a.heatmap.days, slots: a.heatmap.slots, grid: a.heatmap.grid },
+    teams: a.teamPerformance.rows.map((r, i) => ({ teamId: i + 1, name: r[0], sport: 'Football', athletes: 14, played: r[1], won: r[2], drawn: r[3], lost: r[4], points: r[6], attendanceRate: 80 + (i % 4) * 4, averageRating: 70 + (i % 5) * 3 })),
+    insights: a.insights.map((i) => ({ severity: SEVERITY[i.tone] || 'info', title: i.title, text: i.text, link: '/analytics' })),
+    attention: a.attention.slice(0, 20).map((x) => ({ athleteId: x.athleteId, name: x.name, sport: x.sport, reasons: x.reasons })),
+    outstanding: { amount: pending.reduce((s, p) => s + p.amount, 0), memberships: pending.length },
+  }
+}
+
+export async function getOverview({ from, to }) {
+  if (USE_MOCKS) return demoOverview({ from, to })
+  const { data } = await apiClient.get('/analytics/overview', { params: { from, to } })
+  return data
 }
