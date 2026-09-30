@@ -2,15 +2,6 @@
 
 Database systems final project (CS323). MariaDB.
 
-## Team
-
-| Role | Member |
-|---|---|
-| Database / Schema Lead | David Acheampong Awuah |
-| Data & Query Lead | Richard Yemoh |
-| Programming & Security Leads | Samira Donkoh, Ronald Ocloo |
-| Application | Whole team |
-
 ## Repository structure
 
 | Folder | Contents |
