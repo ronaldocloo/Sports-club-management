@@ -46,6 +46,16 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
+		<!-- Sessions are stored in the database, so several API instances can share them and a restart keeps people signed in -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-session-jdbc</artifactId>
+		</dependency>
+		<!-- Password-reset emails (only used when SMTP is configured) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
 		<!-- Health checks for containers and load balancers (only /actuator/health is exposed) -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

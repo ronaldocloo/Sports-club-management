@@ -76,6 +76,10 @@ class AuthorizationMatrixIntegrationTest extends IntegrationTestBase {
                 {"admin", "GET", "/api/intelligence/revenue-forecast", "false"}, {"desk", "GET", "/api/intelligence/revenue-forecast", "true"},
                 {"admin", "GET", "/api/intelligence/anomalies", "false"}, {"desk", "GET", "/api/intelligence/anomalies", "false"}, {"coach", "GET", "/api/intelligence/anomalies", "true"},
                 {"admin", "POST", "/api/admin/jobs/run", "false"}, {"desk", "POST", "/api/admin/jobs/run", "true"}, {"coach", "POST", "/api/admin/jobs/run", "true"},
+                // accounts: anyone signed in manages their own email and two-step sign-in; only an Admin resets someone else's
+                {"admin", "PUT", "/api/auth/email", "false"}, {"desk", "PUT", "/api/auth/email", "false"}, {"coach", "PUT", "/api/auth/email", "false"}, {"athlete", "PUT", "/api/auth/email", "false"},
+                {"admin", "POST", "/api/auth/mfa/setup", "false"}, {"desk", "POST", "/api/auth/mfa/setup", "false"}, {"coach", "POST", "/api/auth/mfa/setup", "false"}, {"athlete", "POST", "/api/auth/mfa/setup", "false"},
+                {"admin", "POST", "/api/users/999/mfa/reset", "false"}, {"desk", "POST", "/api/users/999/mfa/reset", "true"}, {"coach", "POST", "/api/users/999/mfa/reset", "true"}, {"athlete", "POST", "/api/users/999/mfa/reset", "true"},
                 // notifications: everyone signed in
                 {"admin", "GET", "/api/notifications", "false"}, {"desk", "GET", "/api/notifications", "false"}, {"coach", "GET", "/api/notifications", "false"}, {"athlete", "GET", "/api/notifications", "false"},
         };

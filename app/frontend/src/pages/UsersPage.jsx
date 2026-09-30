@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, Minus, Plus, UserRound } from 'lucide-react'
-import { createUser, getUsers, updateUser } from '../api/operations'
+import { createUser, getUsers, resetUserTwoStep, updateUser } from '../api/operations'
 import { getAthletes } from '../api/athletes'
 import { getCoaches } from '../api/coaches'
 import { errorMessage, USE_MOCKS } from '../api/client'
@@ -45,6 +45,7 @@ function UserModal({ open, coaches, athletes, onClose, onSave }) {
     if (USE_MOCKS && !v.name.trim()) err.name = 'Full name is required.'
     if (!/^[a-z0-9._-]{3,}$/i.test(v.username)) err.username = 'Use at least 3 letters, numbers, dots or dashes.'
     if (USE_MOCKS && !/^\S+@\S+\.\S+$/.test(v.email)) err.email = 'Enter a valid email address.'
+    if (!USE_MOCKS && v.email && !/^\S+@\S+\.\S+$/.test(v.email)) err.email = 'Enter a valid email address.'
     if (!USE_MOCKS && passwordError(v.password, v.username)) err.password = passwordError(v.password, v.username)
     if (!v.role) err.role = 'Select a role.'
     if (!USE_MOCKS && (v.role === 'Coach' || v.role === 'Athlete') && !v.link) err.link = `Link this account to ${v.role === 'Athlete' ? 'an athlete' : 'a coach'} record.`
@@ -68,6 +69,7 @@ function UserModal({ open, coaches, athletes, onClose, onSave }) {
         {USE_MOCKS && <Input label="Full name" required value={v.name} onChange={set('name')} error={errors.name} />}
         <Input label="Username" required value={v.username} onChange={set('username')} error={errors.username} autoComplete="off" />
         {USE_MOCKS && <div className="sm:col-span-2"><Input label="Email" required type="email" value={v.email} onChange={set('email')} error={errors.email} /></div>}
+        {!USE_MOCKS && <div className="sm:col-span-2"><Input label="Email (optional)" type="email" value={v.email} onChange={set('email')} error={errors.email} hint="Lets them reset a forgotten password by email." autoComplete="off" /></div>}
         {!USE_MOCKS && <div className="sm:col-span-2"><Input label="Password" required type="password" value={v.password} onChange={set('password')} error={errors.password} hint="At least 8 characters with a letter and a number. Share it securely; they can change it in Settings." autoComplete="new-password" /></div>}
         <div className="sm:col-span-2"><Select label="Role" required options={roles.map((value) => ({ value, label: ROLE_LABELS[value] }))} placeholder="Select role" value={v.role} onChange={set('role')} error={errors.role} /></div>
         {!USE_MOCKS && <div className="sm:col-span-2"><LinkField role={v.role} value={v.link} onChange={set('link')} coaches={coaches} athletes={athletes} error={errors.link} /></div>}
@@ -138,7 +140,7 @@ function ResetPasswordModal({ user, onClose, onSave }) {
     <Modal open={!!user} onClose={onClose} title={`Reset password for ${user?.username || ''}`}
       footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" form="reset-form" loading={saving}>Reset password</Button></>}>
       <form id="reset-form" onSubmit={submit} noValidate className="space-y-4">
-        <Input label="New password" required type="password" value={pw} onChange={(e) => { setPw(e.target.value); setError('') }} error={error} hint="Share it with the user securely. Open sessions are not affected." autoComplete="new-password" />
+        <Input label="New password" required type="password" value={pw} onChange={(e) => { setPw(e.target.value); setError('') }} error={error} hint="Share it with the user securely. They are signed out on every device." autoComplete="new-password" />
       </form>
     </Modal>
   )
@@ -152,6 +154,7 @@ function UsersPage() {
   const [toggle, setToggle] = useState(null)
   const [editing, setEditing] = useState(null)
   const [resetting, setResetting] = useState(null)
+  const [resetTwoStep, setResetTwoStep] = useState(null)
   const { push } = useToast()
 
   const coaches = data?.coaches || []
@@ -175,6 +178,17 @@ function UsersPage() {
   async function save(user, changes) {
     replace(await updateUser(user, changes))
     push(changes.password ? `Password reset for ${user.username}` : `${user.username} updated`)
+  }
+
+  async function confirmTwoStepReset() {
+    const target = resetTwoStep
+    setResetTwoStep(null)
+    try {
+      replace(await resetUserTwoStep(target))
+      push(`Two-step sign-in reset for ${target.username}`)
+    } catch (e) {
+      push(errorMessage(e), 'error')
+    }
   }
 
   async function confirmToggle() {
@@ -223,12 +237,13 @@ function UsersPage() {
                           </div>
                         </td>
                         <td className="px-5 py-3"><Badge tone={roleTone[u.role]}>{ROLE_LABELS[u.role]}</Badge></td>
-                        <td className="px-5 py-3"><Badge tone={u.active ? 'green' : 'gray'}>{u.active ? 'Active' : 'Inactive'}</Badge></td>
+                        <td className="px-5 py-3"><span className="inline-flex items-center gap-2"><Badge tone={u.active ? 'green' : 'gray'}>{u.active ? 'Active' : 'Inactive'}</Badge>{u.mfaEnabled && <Badge tone="blue">2-step</Badge>}</span></td>
                         <td className="px-5 py-3 text-gray-700">{u.lastLogin ? formatDate(u.lastLogin) : 'Never'}</td>
                         <td className="px-5 py-3 text-right">
                           <RowMenu label={`Actions for ${u.username}`} items={[
                             { label: 'Edit role', hidden: isMe(u), onClick: () => setEditing(u) },
                             { label: 'Reset password', hidden: USE_MOCKS, onClick: () => setResetting(u) },
+                            { label: 'Reset two-step sign-in', hidden: USE_MOCKS || !u.mfaEnabled, onClick: () => setResetTwoStep(u) },
                             { label: u.active ? 'Deactivate' : 'Reactivate', hidden: isMe(u), danger: u.active, onClick: () => setToggle(u) },
                           ]} />
                         </td>
@@ -268,6 +283,9 @@ function UsersPage() {
       <UserModal open={open} coaches={coaches} athletes={athletes} onClose={() => setOpen(false)} onSave={add} />
       <EditRoleModal user={editing} coaches={coaches} athletes={athletes} onClose={() => setEditing(null)} onSave={save} />
       <ResetPasswordModal user={resetting} onClose={() => setResetting(null)} onSave={save} />
+      <ConfirmDialog open={!!resetTwoStep} danger title="Reset two-step sign-in?"
+        description={`${resetTwoStep?.username} will be able to sign in with just their password until they set it up again. Only do this after checking it is really them (for example, they lost their phone).`}
+        confirmLabel="Reset" onConfirm={confirmTwoStepReset} onCancel={() => setResetTwoStep(null)} />
       <ConfirmDialog open={!!toggle} danger={toggle?.active} title={toggle?.active ? 'Deactivate this user?' : 'Reactivate this user?'}
         description={toggle?.active ? `${toggle?.username} will be signed out and won't be able to sign in until reactivated.` : `${toggle?.username} will be able to sign in again.`}
         confirmLabel={toggle?.active ? 'Deactivate' : 'Reactivate'} onConfirm={confirmToggle} onCancel={() => setToggle(null)} />

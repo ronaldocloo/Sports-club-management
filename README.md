@@ -34,6 +34,8 @@ mysql -u root -p sports_club < schema/04_phase3_auth.sql   # Athlete role + acco
 mysql -u root -p sports_club < schema/05_phase4_platform.sql # organizations, fixtures, attendance, events, audit (safe to re-run)
 mysql -u root -p sports_club < schema/06_phase5_reporting.sql # report export audit action + indexes (safe to re-run)
 mysql -u root -p sports_club < schema/07_phase7_security.sql  # login lockout columns (safe to re-run)
+mysql -u root -p sports_club < schema/08_sessions.sql        # database-backed sessions (safe to re-run)
+mysql -u root -p sports_club < schema/09_accounts.sql        # email, password reset, two-step sign-in (safe to re-run)
 ```
 
 Copy `.env.example` to `.env` and fill in local credentials. Never commit `.env`.
@@ -111,11 +113,15 @@ Setting `DEMO_SEED=true` seeds a realistic club, *Accra Lions Academy*, for inve
 walkthrough, the demo accounts and honest answers to likely questions. `npm run build:demo` in `app/frontend` produces a
 static, backend-free demo you can host anywhere.
 
-**Tests.** `docs/TESTING.md` explains how to run the backend suite (about 255 tests against a real MariaDB test database),
-the frontend suite (Vitest, 92 tests) and the browser tests (Playwright). CI runs all three (`.github/workflows/ci.yml`).
+**Tests.** `docs/TESTING.md` explains how to run the backend suite (about 295 tests against a real MariaDB test database),
+the frontend suite (Vitest, 108 tests) and the browser tests (Playwright). CI runs all three (`.github/workflows/ci.yml`).
 
-**Still demo-only:** the Super Admin "view as" role switcher and sample data exist only in demo mode. Email (password
-reset, notification emails) is not implemented.
+**Accounts.** Sessions are stored in the database, so several API instances can share them and restarts keep people signed
+in. Password reset by email works when SMTP is configured (otherwise the UI says it is unavailable). Two-step sign-in with
+any authenticator app is optional per user, with recovery codes and an admin reset. See `docs/DEPLOYMENT.md`.
+
+**Still demo-only:** the Super Admin "view as" role switcher and sample data exist only in demo mode. Notification emails
+are not implemented (only password-reset email).
 
 ## Workflow
 

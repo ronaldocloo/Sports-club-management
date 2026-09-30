@@ -46,7 +46,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         long now = System.currentTimeMillis();
         String client = request.getRemoteAddr();
         long wait = 0;
-        if ("POST".equals(request.getMethod()) && request.getRequestURI().equals("/api/auth/login")) {
+        String uri = request.getRequestURI();
+        if ("POST".equals(request.getMethod()) && (uri.equals("/api/auth/login") || uri.equals("/api/auth/forgot-password") || uri.equals("/api/auth/reset-password"))) {
             wait = login.tryAcquire(client, now);
         } else if (request.getRequestURI().startsWith("/api/reports/") && request.getParameter("format") != null && !"json".equals(request.getParameter("format"))) {
             wait = exports.tryAcquire(client, now);

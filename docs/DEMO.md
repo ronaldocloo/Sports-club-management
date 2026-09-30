@@ -71,11 +71,11 @@ Have a fallback ready: the static demo (option A) on your phone works with no ne
 - **Is the data real?** The demo club is synthetic. The product, security model and tests are real.
 - **How is one club kept from seeing another?** Every table carries the organization; every query is filtered by it at the
   database layer and there are automated tests proving isolation (`TenantIsolationIntegrationTest`).
-- **What is tested?** About 255 backend tests against a real database (including a 109-case role-and-endpoint matrix), 92
+- **What is tested?** About 295 backend tests against a real database (including a 109-case role-and-endpoint matrix), 108
   frontend tests and an end-to-end browser test, run on every push.
-- **What is not built?** Email (password reset, notifications), multi-factor authentication, payments processing (payments are
-  recorded, not collected online), a native mobile app, and horizontal scaling beyond one API instance. These are on the
-  roadmap, not hidden.
+- **What is not built?** Online payment collection (payments are recorded, not collected), notification emails (password-reset
+  email exists), enforcing two-step sign-in for admins, a native mobile app, and a shared rate limiter across several API
+  instances. These are on the roadmap, not hidden.
 - **How does it make money?** Not decided in this repository. The data model already has plans (Starter, Professional,
   Enterprise) per organization; pricing is a business decision to be made with the investor.
 

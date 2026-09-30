@@ -20,4 +20,6 @@ public class AppUserResponse {
     private Integer organizationId;
     private Boolean isActive;
     private LocalDateTime lastLogin;
+    private String email;
+    private Boolean mfaEnabled;
 }

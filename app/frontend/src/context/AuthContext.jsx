@@ -40,16 +40,22 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const login = useCallback(async (username, password) => {
+  const login = useCallback(async (username, password, code) => {
     if (DEMO_MODE) {
       const demo = { ...DEMO_USER, role: readDemoRole() }
       setUser(demo)
       return demo
     }
-    const loggedInUser = await loginRequest(username, password)
+    const loggedInUser = await loginRequest(username, password, code)
     setSessionExpired(false)
     setUser(loggedInUser)
     return loggedInUser
+  }, [])
+
+  // Re-reads the signed-in user, for example after turning two-step sign-in on or changing the email address.
+  const refreshUser = useCallback(async () => {
+    if (DEMO_MODE) return
+    setUser(await getCurrentUser())
   }, [])
 
   const logout = useCallback(async () => {
@@ -69,8 +75,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, loading, sessionExpired, login, logout, demoMode: DEMO_MODE, switchDemoRole }),
-    [user, loading, sessionExpired, login, logout, switchDemoRole],
+    () => ({ user, loading, sessionExpired, login, logout, refreshUser, demoMode: DEMO_MODE, switchDemoRole }),
+    [user, loading, sessionExpired, login, logout, refreshUser, switchDemoRole],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -49,6 +49,18 @@ public class AppUser {
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
+    @Column(name = "email", length = 100)
+    private String email;
+
+    @Column(name = "mfa_secret", length = 64)
+    private String mfaSecret;
+
+    @Column(name = "mfa_enabled", nullable = false)
+    private Boolean mfaEnabled = false;
+
+    @Column(name = "mfa_last_step")
+    private Long mfaLastStep;
+
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 }

@@ -11,6 +11,7 @@ const UsersPage = lazy(() => import("./pages/UsersPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 import LoginPage from "./pages/LoginPage";
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const AthletesPage = lazy(() => import("./pages/AthletesPage"));
 const AthleteDetailPage = lazy(() => import("./pages/AthleteDetailPage"));
 const TeamsPage = lazy(() => import("./pages/TeamsPage"));
@@ -38,6 +39,7 @@ function App() {
       <Suspense fallback={<AuthSpinner />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/welcome" element={<LandingPage />} />
 
         <Route element={<AppShell />}>

@@ -161,6 +161,20 @@ Every calculation reads only the caller's organization (the tenant filter applie
 ### Known limits (be honest with reviewers)
 - The Maven OWASP dependency-check was not run; `npm audit` is clean and runs in CI.
 - Native queries bypass the tenant filter. The only two (`OrganizationRepository`, athlete and user counts for the Super Admin's organization list) filter by an explicit organization id. Any new native query on a tenant table must do the same.
-- Rate limits are per server process (fine for one instance; use a shared store behind several).
-- No password reset by email and no multi-factor authentication yet.
+- Rate limits are per server process (lockout is shared through the database; add a limit at the load balancer for several instances).
+- Two-step sign-in is optional; there is no policy to require it for Admins yet.
 
+
+## Phase 9 additions: sessions, password reset and two-step sign-in
+
+- **Sessions** are stored in the database (Spring Session JDBC, `schema/08_sessions.sql`), so any instance can serve any user and a
+  restart keeps sessions. The cookie is `SESSION`, always HttpOnly, SameSite Lax (Strict in `prod`), Secure when configured; it is
+  set explicitly (`SessionCookieConfig`) rather than relying on web-server defaults. Account status is still re-checked on every request.
+- **Password reset by email**: a 256-bit random token, valid for 60 minutes and once; only its SHA-256 hash is stored. Asking for a
+  link gives the same response whether or not the address exists, sending happens on a background thread so timing does not
+  reveal it, asking again replaces the previous link, and a successful reset clears any lockout and ends the person's other
+  sessions. The same session revocation applies when an administrator sets someone's password. Off unless SMTP is configured.
+- **Two-step sign-in**: TOTP (RFC 6238; HMAC-SHA1, 30 s, 6 digits, checked against the RFC vectors in `TotpTest`), one accepted
+  time step at most once (no replay), plus ten one-time recovery codes stored as hashes. A wrong code counts towards the same
+  lockout as a wrong password. Turning it off needs the password and a code; an admin can reset it for a colleague (audited),
+  only within their own organization. Enrolment, enabling, disabling and admin reset are recorded in the audit log.

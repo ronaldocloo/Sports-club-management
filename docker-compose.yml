@@ -23,6 +23,8 @@ services:
       - ./schema/05_phase4_platform.sql:/docker-entrypoint-initdb.d/05_phase4_platform.sql:ro
       - ./schema/06_phase5_reporting.sql:/docker-entrypoint-initdb.d/06_phase5_reporting.sql:ro
       - ./schema/07_phase7_security.sql:/docker-entrypoint-initdb.d/07_phase7_security.sql:ro
+      - ./schema/08_sessions.sql:/docker-entrypoint-initdb.d/08_sessions.sql:ro
+      - ./schema/09_accounts.sql:/docker-entrypoint-initdb.d/09_accounts.sql:ro
       - ./deploy/db/99-least-privilege.sh:/docker-entrypoint-initdb.d/99-least-privilege.sh:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
@@ -49,6 +51,16 @@ services:
       # First platform administrator (created once, then remove these two lines' values from .env).
       APP_BOOTSTRAP_SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME:-superadmin}
       APP_BOOTSTRAP_SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-}
+      # Email is optional. Without a mail server, password reset by email is switched off and the sign-in page says so.
+      SPRING_MAIL_HOST: ${MAIL_HOST:-}
+      SPRING_MAIL_PORT: ${MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${MAIL_AUTH:-true}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${MAIL_STARTTLS:-true}
+      APP_MAIL_FROM: ${MAIL_FROM:-}
+      # The address people open the site at; reset links in emails point here.
+      APP_PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8088}
       # Demo data: set DEMO_SEED=true to create the "Accra Lions Academy" organization on first start.
       APP_DEMO_SEED: ${DEMO_SEED:-false}
       APP_DEMO_PASSWORD: ${DEMO_PASSWORD:-}

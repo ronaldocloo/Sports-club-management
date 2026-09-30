@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext'
 import { ROLE_LABELS, normalizeRole } from '../utils/permissions'
 import { Badge, Button, Card, CardHeader, EmptyState, Input, PageHeader, TableSkeleton, Tabs, useToast } from '../components/ui'
 import { formatDate } from '../utils/format'
+import { EmailCard, TwoStepCard } from '../components/settings/SecurityCards'
 
 const plans = [
   { name: 'Starter', blurb: 'For small clubs', features: ['Athletes, teams and coaches', 'Memberships', 'Basic dashboard'] },
@@ -107,29 +108,28 @@ function ProfileTab() {
           <div className="flex justify-end"><Button type="submit" loading={saving}>Update password</Button></div>
         </form>
       </Card>
+      {!USE_MOCKS && <EmailCard />}
+      {!USE_MOCKS && <TwoStepCard />}
     </div>
   )
 }
 
 function PreferencesTab() {
-  const { push } = useToast()
-  const [prefs, setPrefs] = useState({ membership: true, payments: true, competitions: true, facilities: false, email: true })
-  const rows = [['membership', 'Membership expiry alerts'], ['payments', 'Payment received or failed'], ['competitions', 'Competition reminders'], ['facilities', 'Facility booking updates'], ['email', 'Also send by email']]
+  const alerts = [
+    ['Memberships', 'A membership is about to end or has ended.'],
+    ['Payments', 'A payment is received, and repeated failures on one membership.'],
+    ['Competitions and fixtures', 'Results are recorded and registrations open.'],
+    ['Events and facilities', 'Upcoming events and changes to bookings.'],
+  ]
   return (
     <Card>
-      <CardHeader title="Notification preferences" />
+      <CardHeader title="Notifications" subtitle="Alerts appear in the bell at the top of every page and on the Notifications page." />
       <ul className="divide-y divide-gray-100">
-        {rows.map(([k, label]) => (
-          <li key={k} className="flex items-center justify-between px-5 py-4">
-            <span className="text-sm text-gray-800">{label}</span>
-            <button role="switch" aria-checked={prefs[k]} aria-label={label}
-              onClick={() => { setPrefs((p) => ({ ...p, [k]: !p[k] })); push('Preference updated') }}
-              className={`relative h-6 w-11 rounded-full transition-colors ${prefs[k] ? 'bg-blue-600' : 'bg-gray-300'}`}>
-              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${prefs[k] ? 'left-[22px]' : 'left-0.5'}`} />
-            </button>
-          </li>
+        {alerts.map(([label, text]) => (
+          <li key={label} className="px-5 py-4"><p className="text-sm font-medium text-gray-900">{label}</p><p className="mt-0.5 text-sm text-gray-500">{text}</p></li>
         ))}
       </ul>
+      <p className="border-t border-gray-100 px-5 py-4 text-sm text-gray-500">Which alerts you see depends on your role. They cannot be switched off individually yet, and notifications are not sent by email.</p>
     </Card>
   )
 }

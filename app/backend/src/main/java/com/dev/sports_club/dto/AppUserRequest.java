@@ -25,4 +25,9 @@ public class AppUserRequest {
     private Integer athleteId;
 
     private Boolean isActive;
+
+    // Optional. Omit to leave unchanged; send an empty string to remove it.
+    @jakarta.validation.constraints.Email
+    @Size(max = 100)
+    private String email;
 }

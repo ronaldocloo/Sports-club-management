@@ -31,6 +31,8 @@ public class AppUserService {
     private final CoachRepository coachRepository;
     private final AthleteRepository athleteRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SessionRevoker sessions;
+    private final MfaService mfa;
 
     /** Users of the caller's organization. A Super Admin with no organization selected sees everyone. */
     public List<AppUserResponse> findAll() {
@@ -89,6 +91,7 @@ public class AppUserService {
         entity.setCoachId(request.getCoachId());
         entity.setAthleteId(request.getAthleteId());
         entity.setIsActive(request.getIsActive() != null ? request.getIsActive() : Boolean.TRUE);
+        applyEmail(entity, request.getEmail());
         return toResponse(repository.save(entity));
     }
 
@@ -118,6 +121,7 @@ public class AppUserService {
             entity.setPasswordHash(passwordEncoder.encode(request.getPassword()));
             entity.setFailedAttempts(0);
             entity.setLockedUntil(null);
+            sessions.revokeAll(entity.getUsername());   // an administrator changing a password signs the person out everywhere
         }
         if (Boolean.TRUE.equals(request.getIsActive())) {
             entity.setFailedAttempts(0);
@@ -129,6 +133,34 @@ public class AppUserService {
         if (request.getIsActive() != null) {
             entity.setIsActive(request.getIsActive());
         }
+        applyEmail(entity, request.getEmail());
+        return toResponse(repository.save(entity));
+    }
+
+    /** null leaves the address alone, an empty string removes it, anything else must be unused by any other account. */
+    private void applyEmail(AppUser entity, String email) {
+        if (email == null) return;
+        String normalized = email.trim().toLowerCase();
+        if (normalized.isEmpty()) { entity.setEmail(null); return; }
+        boolean takenByOther = repository.findByEmailIgnoreCase(normalized).stream().anyMatch(u -> !Objects.equals(u.getUserId(), entity.getUserId()));
+        if (takenByOther) throw new BusinessRuleViolationException("That email address is already used by another account");
+        entity.setEmail(normalized);
+    }
+
+    /** A signed-in user sets or clears their own address (used to send password-reset links). */
+    public AppUserResponse setOwnEmail(String username, String email) {
+        AppUser entity = repository.findByUsername(username).orElseThrow(() -> new EntityNotFoundException("AppUser not found: " + username));
+        applyEmail(entity, email == null ? "" : email);
+        return toResponse(repository.save(entity));
+    }
+
+    /** Admin: someone lost their phone. Turns two-step sign-in off so they can sign in and enrol again. */
+    public AppUserResponse resetMfa(Integer id) {
+        AppUser entity = load(id);
+        if (entity.getRole() == AppUserRole.SuperAdmin && !actorIsSuperAdmin()) {
+            throw new BusinessRuleViolationException("Only a Super Admin can manage Super Admin accounts");
+        }
+        mfa.resetByAdmin(entity);
         return toResponse(repository.save(entity));
     }
 
@@ -218,7 +250,9 @@ public class AppUserService {
                 entity.getAthleteId(),
                 entity.getOrganizationId(),
                 entity.getIsActive(),
-                entity.getLastLogin()
+                entity.getLastLogin(),
+                entity.getEmail(),
+                Boolean.TRUE.equals(entity.getMfaEnabled())
         );
     }
 }

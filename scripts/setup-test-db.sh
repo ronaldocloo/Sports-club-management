@@ -20,7 +20,7 @@ mariadb $ADMIN -e "DROP DATABASE IF EXISTS \`$DB_TEST_NAME\`; CREATE DATABASE \`
 mariadb $ADMIN -e "CREATE USER IF NOT EXISTS '$DB_USER'@'$GRANT_HOST' IDENTIFIED BY '$DB_PASSWORD'; GRANT ALL PRIVILEGES ON \`$DB_TEST_NAME\`.* TO '$DB_USER'@'$GRANT_HOST'; FLUSH PRIVILEGES;"
 
 # Tables and later migrations only: no seed data, and no triggers (the services enforce the same rules).
-for f in schema/02_tables.sql schema/03_indexes.sql schema/04_phase3_auth.sql schema/05_phase4_platform.sql schema/06_phase5_reporting.sql schema/07_phase7_security.sql; do
+for f in schema/02_tables.sql schema/03_indexes.sql schema/04_phase3_auth.sql schema/05_phase4_platform.sql schema/06_phase5_reporting.sql schema/07_phase7_security.sql schema/08_sessions.sql schema/09_accounts.sql; do
   echo "  loading $f"
   mariadb $ADMIN "$DB_TEST_NAME" < "$f"
 done

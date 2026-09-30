@@ -23,7 +23,9 @@ cd app/backend && ./mvnw -B test
 | `IntelligenceIntegrationTest` (21) | retention ranking, exact forecast on a known series, anomaly detection, nudges, scoping |
 | `DemoDataIntegrationTest` (11) | the seeded demo club really contains the story the investor demo tells (growth, at-risk athletes ranked, the three planted anomalies, consistent league table, role scoping) |
 | `DeploymentIntegrationTest` (4) | public health endpoint and nothing else from Actuator, first-Super-Admin bootstrap |
-| `unit/*` (36) | trend maths, retention scorer boundaries, password policy, rate limiter, exporters |
+| `AccountsIntegrationTest` (19) | password reset by email (hashed one-time tokens, no account enumeration, expiry, replacement, lockout cleared), two-step sign-in (enrolment, replay refused, recovery codes, lockout, disable, admin reset, tenant scope), email uniqueness, sessions ended on admin password change |
+| `SharedSessionIntegrationTest` (4) | database-backed sessions with real cookies: stored, expire, logout deletes, deactivation is immediate, cookie flags |
+| `unit/*` (43) | trend maths, retention scorer boundaries, password policy, rate limiter, exporters |
 
 Tests build their own data (`IntegrationTestBase` helpers) and roll back, so they are order independent.
 

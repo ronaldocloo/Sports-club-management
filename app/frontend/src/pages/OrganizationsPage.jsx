@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Landmark, Plus } from 'lucide-react'
 import { createOrganization, getOrganizations, updateOrganization } from '../api/organizations'
 import { errorMessage } from '../api/client'
@@ -53,10 +53,46 @@ function OrgModal({ open, onClose, onSave }) {
   )
 }
 
+function RenameModal({ org, onClose, onSave }) {
+  const [name, setName] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const current = org?.name || ''
+  const value = name
+  useEffect(() => { if (org) { setName(org.name); setError('') } }, [org])
+
+  async function submit(e) {
+    e.preventDefault()
+    const trimmed = value.trim()
+    if (!trimmed) { setError('Organization name is required.'); return }
+    if (trimmed === current) { onClose(); return }
+    setSaving(true)
+    try {
+      await onSave(org, trimmed)
+      setName(''); setError(''); onClose()
+    } catch (e2) {
+      setError(errorMessage(e2, "We couldn't rename this organization."))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const close = () => { setName(''); setError(''); onClose() }
+  return (
+    <Modal open={!!org} onClose={close} title="Rename organization"
+      footer={<><Button variant="secondary" onClick={close}>Cancel</Button><Button type="submit" form="rename-org-form" loading={saving}>Save name</Button></>}>
+      <form id="rename-org-form" onSubmit={submit} noValidate>
+        <Input label="Organization name" required value={value} onChange={(e) => setName(e.target.value)} error={error} maxLength={100} />
+      </form>
+    </Modal>
+  )
+}
+
 function OrganizationsPage() {
   const { data, setData, status, reload } = useAsync(getOrganizations)
   const { activeId, switchTo } = useOrganization()
   const [open, setOpen] = useState(false)
+  const [renaming, setRenaming] = useState(null)
   const { push } = useToast()
 
   async function add(values) {
@@ -64,6 +100,12 @@ function OrganizationsPage() {
     setData((l) => [...(l || []), created])
     setOpen(false)
     push(`${created.name} created`)
+  }
+
+  async function rename(org, name) {
+    const updated = await updateOrganization(org, { name })
+    setData((l) => l.map((o) => (o.organizationId === org.organizationId ? { ...o, ...updated, name } : o)))
+    push(`Renamed to ${name}`)
   }
 
   async function change(org, changes, message) {
@@ -108,6 +150,7 @@ function OrganizationsPage() {
                           {String(activeId) === String(o.organizationId) ? 'Open' : 'Enter'}
                         </Button>
                         <RowMenu label={`Actions for ${o.name}`} items={[
+                          { label: 'Rename', onClick: () => setRenaming(o) },
                           ...plans.filter((p) => p !== o.plan).map((p) => ({ label: `Change plan to ${p}`, onClick: () => change(o, { plan: p }, `${o.name} moved to ${p}`) })),
                           { label: o.status === 'Suspended' ? 'Reactivate' : 'Suspend', danger: o.status !== 'Suspended', onClick: () => change(o, { status: o.status === 'Suspended' ? 'Active' : 'Suspended' }, o.status === 'Suspended' ? `${o.name} reactivated` : `${o.name} suspended`) },
                         ]} />
@@ -121,6 +164,7 @@ function OrganizationsPage() {
         )
       )}
       <OrgModal open={open} onClose={() => setOpen(false)} onSave={add} />
+      <RenameModal org={renaming} onClose={() => setRenaming(null)} onSave={rename} />
     </div>
   )
 }

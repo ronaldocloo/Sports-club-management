@@ -176,7 +176,7 @@ export async function deleteEvent(event) {
 }
 
 // ---------- users ----------
-const userRow = (u) => ({ id: u.userId, name: u.username, username: u.username, email: '', role: u.role, active: u.isActive, lastLogin: u.lastLogin, coachId: u.coachId, athleteId: u.athleteId })
+const userRow = (u) => ({ id: u.userId, name: u.username, username: u.username, email: u.email || '', mfaEnabled: !!u.mfaEnabled, role: u.role, active: u.isActive, lastLogin: u.lastLogin, coachId: u.coachId, athleteId: u.athleteId })
 
 export async function getUsers() {
   if (USE_MOCKS) { await delay(); return initialUsers.map((u) => ({ ...u })) }
@@ -187,7 +187,7 @@ export async function getUsers() {
 export async function createUser(v) {
   if (USE_MOCKS) return { id: Date.now(), ...v, active: true, lastLogin: null }
   const { data } = await apiClient.post('/users', {
-    username: v.username, password: v.password, role: v.role,
+    username: v.username, password: v.password, role: v.role, ...(v.email ? { email: v.email.trim() } : {}),
     coachId: v.role === 'Coach' && v.coachId ? Number(v.coachId) : null,
     athleteId: v.role === 'Athlete' && v.athleteId ? Number(v.athleteId) : null,
     isActive: true,
@@ -207,6 +207,14 @@ export async function updateUser(user, changes) {
     isActive: next.active,
     ...(changes.password ? { password: changes.password } : {}),
   })
+  invalidate()
+  return userRow(data)
+}
+
+// An administrator switches off someone's two-step sign-in (they lost their phone).
+export async function resetUserTwoStep(user) {
+  if (USE_MOCKS) return { ...user, mfaEnabled: false }
+  const { data } = await apiClient.post(`/users/${user.id}/mfa/reset`)
   invalidate()
   return userRow(data)
 }
