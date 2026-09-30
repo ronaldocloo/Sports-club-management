@@ -86,8 +86,15 @@ public class DataSnapshot {
             return out;
         }
 
+        /**
+         * Was this membership in force on the given day? The daily job flips a membership to Expired once it ends, so
+         * for a day in the past an Expired membership still counts (otherwise every comparison with an earlier period
+         * would undercount). For today or later only Active counts; Suspended never does.
+         */
         public boolean activeOn(Membership m, LocalDate day) {
-            return m.getStatus() == MembershipStatus.Active && !m.getStartDate().isAfter(day) && !m.getEndDate().isBefore(day);
+            boolean inForce = m.getStatus() == MembershipStatus.Active
+                    || (m.getStatus() == MembershipStatus.Expired && day.isBefore(LocalDate.now()));
+            return inForce && !m.getStartDate().isAfter(day) && !m.getEndDate().isBefore(day);
         }
 
         /** Each athlete's latest membership (active first, then latest end date). */

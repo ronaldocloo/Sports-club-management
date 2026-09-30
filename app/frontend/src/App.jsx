@@ -1,39 +1,41 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import AppShell from "./components/layout/AppShell";
 
-import DashboardPage from "./pages/DashboardPage";
-import LandingPage from "./pages/LandingPage";
-import MyProfilePage from "./pages/MyProfilePage";
-import SportsPage from "./pages/SportsPage";
-import UsersPage from "./pages/UsersPage";
-import NotificationsPage from "./pages/NotificationsPage";
-import SettingsPage from "./pages/SettingsPage";
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const MyProfilePage = lazy(() => import("./pages/MyProfilePage"));
+const SportsPage = lazy(() => import("./pages/SportsPage"));
+const UsersPage = lazy(() => import("./pages/UsersPage"));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 import LoginPage from "./pages/LoginPage";
-import AthletesPage from "./pages/AthletesPage";
-import AthleteDetailPage from "./pages/AthleteDetailPage";
-import TeamsPage from "./pages/TeamsPage";
-import TeamDetailPage from "./pages/TeamDetailPage";
-import CompetitionsPage from "./pages/CompetitionsPage";
-import CompetitionDetailPage from "./pages/CompetitionDetailPage";
-import CoachesPage from "./pages/CoachesPage";
-import CoachDetailPage from "./pages/CoachDetailPage";
-import MembershipsPage from "./pages/MembershipsPage";
-import PaymentsPage from "./pages/PaymentsPage";
-import FacilitiesPage from "./pages/FacilitiesPage";
-import BookingsPage from "./pages/BookingsPage";
-import EventsPage from "./pages/EventsPage";
-import AnalyticsPage from "./pages/AnalyticsPage";
-import ReportsPage from "./pages/ReportsPage";
-import IntelligencePage from "./pages/IntelligencePage";
-import AttendancePage from "./pages/AttendancePage";
-import OrganizationsPage from "./pages/OrganizationsPage";
+const AthletesPage = lazy(() => import("./pages/AthletesPage"));
+const AthleteDetailPage = lazy(() => import("./pages/AthleteDetailPage"));
+const TeamsPage = lazy(() => import("./pages/TeamsPage"));
+const TeamDetailPage = lazy(() => import("./pages/TeamDetailPage"));
+const CompetitionsPage = lazy(() => import("./pages/CompetitionsPage"));
+const CompetitionDetailPage = lazy(() => import("./pages/CompetitionDetailPage"));
+const CoachesPage = lazy(() => import("./pages/CoachesPage"));
+const CoachDetailPage = lazy(() => import("./pages/CoachDetailPage"));
+const MembershipsPage = lazy(() => import("./pages/MembershipsPage"));
+const PaymentsPage = lazy(() => import("./pages/PaymentsPage"));
+const FacilitiesPage = lazy(() => import("./pages/FacilitiesPage"));
+const BookingsPage = lazy(() => import("./pages/BookingsPage"));
+const EventsPage = lazy(() => import("./pages/EventsPage"));
+const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
+const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const IntelligencePage = lazy(() => import("./pages/IntelligencePage"));
+const AttendancePage = lazy(() => import("./pages/AttendancePage"));
+const OrganizationsPage = lazy(() => import("./pages/OrganizationsPage"));
 
-import RequireAuth from "./components/auth/RequireAuth";
+import RequireAuth, { AuthSpinner } from "./components/auth/RequireAuth";
 
 function App() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<AuthSpinner />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/welcome" element={<LandingPage />} />
@@ -68,6 +70,7 @@ function App() {
           <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
         </Route>
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

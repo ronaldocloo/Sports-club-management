@@ -46,6 +46,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - run: npm run build:demo
       - name: Dependency audit
         run: npm audit --audit-level=high
 
@@ -67,3 +68,37 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: failure()
         with: { name: playwright-report, path: app/frontend/playwright-report }
+
+  stack:
+    name: Containers build and run together
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure a throwaway stack
+        run: |
+          cp deploy/.env.example .env
+          {
+            echo "DB_ROOT_PASSWORD=ci-root-$(openssl rand -hex 8)"
+            echo "DB_PASSWORD=ci-app-$(openssl rand -hex 8)"
+            echo "COOKIE_SECURE=false"
+            echo "SUPERADMIN_PASSWORD=Ci-Super-$(openssl rand -hex 4)9"
+            echo "DEMO_SEED=true"
+            echo "DEMO_PASSWORD=Ci-Demo-$(openssl rand -hex 4)9"
+          } >> .env
+      - name: Build and start (waits for health checks)
+        run: docker compose up -d --build --wait --wait-timeout 300
+      - name: The site and the API answer through nginx
+        run: |
+          curl -fsS http://localhost:8088/ | grep -q '<div id="root">'
+          curl -fsS http://localhost:8088/some/deep/link | grep -q '<div id="root">'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8088/api/auth/me)" = "401"
+          curl -fsSI http://localhost:8088/ | grep -qi 'content-security-policy'
+      - name: Seeded, and the application account cannot alter the schema
+        run: |
+          docker compose logs backend | grep -q "Seeded demo organization"
+          ! docker compose exec -T db sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE" -e "DROP TABLE athlete"'
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+

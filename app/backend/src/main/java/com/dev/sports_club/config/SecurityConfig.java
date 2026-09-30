@@ -57,6 +57,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
 
                         // platform level: only a Super Admin manages organizations
                         .requestMatchers("/api/organizations/**").hasRole("SuperAdmin")

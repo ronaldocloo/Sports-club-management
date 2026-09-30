@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "build:demo": "vite build --mode demo --outDir dist-demo"
   },
   "dependencies": {
     "axios": "^1.19.0",

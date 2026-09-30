@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
@@ -9,6 +9,11 @@ import { useAuth } from '../../context/AuthContext'
 import { canAccess, homeFor } from '../../utils/permissions'
 import NoAccess from '../../pages/NoAccessPage'
 import { AuthSpinner } from '../auth/RequireAuth'
+
+// Shown for a moment the first time a page's code is fetched; the shell around it stays in place.
+function PageLoading() {
+  return <div className="flex justify-center py-24" role="status" aria-label="Loading page"><div className="h-7 w-7 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" /></div>
+}
 
 function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -33,7 +38,7 @@ function AppShell() {
       <div className="md:pl-20 lg:pl-64">
         <Topbar onMenuClick={() => setMobileOpen(true)} />
         <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          {canAccess(user.role, pathname) ? <Outlet /> : <NoAccess />}
+          {canAccess(user.role, pathname) ? <Suspense fallback={<PageLoading />}><Outlet /></Suspense> : <NoAccess />}
         </main>
       </div>
     </div>

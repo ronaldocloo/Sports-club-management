@@ -106,7 +106,12 @@ CSP, `X-Frame-Options`, `Referrer-Policy` and `Permissions-Policy` headers, and 
 production run with `--spring.profiles.active=prod` (`application-prod.properties`): no default database credentials, secure
 cookies, SameSite=Strict. Details in `security/02_password_hashing_and_rbac.md`.
 
-**Tests.** `docs/TESTING.md` explains how to run the backend suite (238 tests against a real MariaDB test database),
+**Deployment and demo.** `docker compose up -d --build` runs the database, API and web tier (see `docs/DEPLOYMENT.md`).
+Setting `DEMO_SEED=true` seeds a realistic club, *Accra Lions Academy*, for investor demos; `docs/DEMO.md` has the ten-minute
+walkthrough, the demo accounts and honest answers to likely questions. `npm run build:demo` in `app/frontend` produces a
+static, backend-free demo you can host anywhere.
+
+**Tests.** `docs/TESTING.md` explains how to run the backend suite (about 255 tests against a real MariaDB test database),
 the frontend suite (Vitest, 92 tests) and the browser tests (Playwright). CI runs all three (`.github/workflows/ci.yml`).
 
 **Still demo-only:** the Super Admin "view as" role switcher and sample data exist only in demo mode. Email (password

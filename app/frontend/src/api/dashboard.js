@@ -13,8 +13,9 @@ export async function getDashboard() {
     getAnalytics(), getTeams().catch(() => []), getCoaches().catch(() => []), getCompetitions(), getEvents(), getPayments().catch(() => []), getRecentActivity(),
   ])
   const counts = Object.fromEntries(analytics.membershipBreakdown.map((m) => [m.name, m.value]))
+  // Routine facility bookings share the Events calendar but are not "events" for a headline number.
   const upcomingEvents = events
-    .filter((e) => e.date >= TODAY_ISO && e.status !== 'Completed')
+    .filter((e) => e.source !== 'booking' && e.date >= TODAY_ISO && e.status !== 'Completed')
     .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
   const upcomingComps = competitions.filter((c) => c.status === 'Upcoming' || c.status === 'Ongoing')
   const outstanding = payments.filter((p) => p.status === 'Pending').reduce((s, p) => s + p.amount, 0)

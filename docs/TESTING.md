@@ -19,8 +19,10 @@ cd app/backend && ./mvnw -B test
 | `AuthorizationMatrixIntegrationTest` (109) | each role gets exactly the allowed status on each endpoint |
 | `DataScopeIntegrationTest` (4) | coaches see only their teams, athletes only themselves |
 | `BusinessRulesIntegrationTest` (21) | payments, memberships, bookings, registration deadline, fixtures and standings, attendance, performance, events, notifications, daily job, audit trail |
-| `AnalyticsReportsIntegrationTest` (21) | exact KPIs and period comparison, report rows and totals, real CSV/XLSX/PDF files, role access, audited exports |
+| `AnalyticsReportsIntegrationTest` (22) | exact KPIs and period comparison, report rows and totals, real CSV/XLSX/PDF files, role access, audited exports |
 | `IntelligenceIntegrationTest` (21) | retention ranking, exact forecast on a known series, anomaly detection, nudges, scoping |
+| `DemoDataIntegrationTest` (11) | the seeded demo club really contains the story the investor demo tells (growth, at-risk athletes ranked, the three planted anomalies, consistent league table, role scoping) |
+| `DeploymentIntegrationTest` (4) | public health endpoint and nothing else from Actuator, first-Super-Admin bootstrap |
 | `unit/*` (36) | trend maths, retention scorer boundaries, password policy, rate limiter, exporters |
 
 Tests build their own data (`IntegrationTestBase` helpers) and roll back, so they are order independent.
@@ -45,6 +47,12 @@ cd app/frontend && npm run test:e2e     # uses your installed Chrome; set PLAYWR
 Starts the app in demo mode on port 5199 and walks the investor flow: sign out and in, add an athlete with validation and
 open the profile, analytics range change, intelligence, a CSV report download, and switching role to see the sidebar and
 access change. No backend or database is needed.
+
+## 4. Containers (CI only)
+
+The `stack` job in CI builds all three images, starts them with `docker compose up --wait`, and checks the site, the deep-link
+fallback, the `/api` proxy, the CSP header, that the demo data seeded, and that the application's database account cannot
+run `DROP TABLE`. This has not been run locally (no Docker on the author's machine), so CI is the first real check.
 
 ## Not covered (yet)
 

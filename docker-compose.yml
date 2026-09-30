@@ -1,0 +1,72 @@
+# The whole platform: database, API and web front end.
+#
+#   cp deploy/.env.example .env       # then fill in the passwords
+#   docker compose up -d --build
+#   open http://localhost:8088
+#
+# Only the web container is published. The API and database are reachable only inside the compose network.
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}
+      MARIADB_DATABASE: ${DB_NAME:-sports_club}
+      MARIADB_USER: ${DB_USER:-sportsapp}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/mysql
+      # Run once, in order, the first time the volume is created.
+      - ./schema/02_tables.sql:/docker-entrypoint-initdb.d/02_tables.sql:ro
+      - ./schema/03_indexes.sql:/docker-entrypoint-initdb.d/03_indexes.sql:ro
+      - ./schema/04_phase3_auth.sql:/docker-entrypoint-initdb.d/04_phase3_auth.sql:ro
+      - ./schema/05_phase4_platform.sql:/docker-entrypoint-initdb.d/05_phase4_platform.sql:ro
+      - ./schema/06_phase5_reporting.sql:/docker-entrypoint-initdb.d/06_phase5_reporting.sql:ro
+      - ./schema/07_phase7_security.sql:/docker-entrypoint-initdb.d/07_phase7_security.sql:ro
+      - ./deploy/db/99-least-privilege.sh:/docker-entrypoint-initdb.d/99-least-privilege.sh:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    build: ./app/backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: db
+      DB_NAME: ${DB_NAME:-sports_club}
+      DB_USER: ${DB_USER:-sportsapp}
+      DB_PASSWORD: ${DB_PASSWORD}
+      # The session cookie is marked Secure in production. Put HTTPS in front (see docs/DEPLOYMENT.md);
+      # for a trial over plain http://localhost only, set COOKIE_SECURE=false in .env.
+      SERVER_SERVLET_SESSION_COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      SERVER_SERVLET_SESSION_COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-strict}
+      # First platform administrator (created once, then remove these two lines' values from .env).
+      APP_BOOTSTRAP_SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME:-superadmin}
+      APP_BOOTSTRAP_SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-}
+      # Demo data: set DEMO_SEED=true to create the "Accra Lions Academy" organization on first start.
+      APP_DEMO_SEED: ${DEMO_SEED:-false}
+      APP_DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  web:
+    build: ./app/frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8088}:8080"
+
+volumes:
+  db-data:

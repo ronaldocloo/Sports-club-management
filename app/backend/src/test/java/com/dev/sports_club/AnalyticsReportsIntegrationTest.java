@@ -56,6 +56,18 @@ class AnalyticsReportsIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    @DisplayName("a membership that has since expired still counts as active in the earlier period")
+    void expiredStillCountsInThePast() throws Exception {
+        int other = athlete(org, "Old", "Member");
+        int type = jdbc.queryForObject("SELECT type_id FROM membership_type WHERE organization_id = ?", Integer.class, org);
+        membership(org, other, type, today.minusDays(90), today.minusDays(20), 100, "Expired");   // in force 30 days ago, over now
+        membership(org, athlete(org, "Paused", "Member"), type, today.minusDays(90), today.plusDays(60), 100, "Suspended");
+        getAs(admin, "/api/analytics/overview?" + range()).andExpect(status().isOk())
+                .andExpect(jsonPath("$.kpis.activeMemberships.value").value(1.0))      // only the seeded Active one today
+                .andExpect(jsonPath("$.kpis.activeMemberships.previous").value(2.0));  // it, plus the one that has since expired
+    }
+
+    @Test
     @DisplayName("analytics are for Admin, FrontDesk and Coach only, and never mix organizations")
     void overviewAccessAndIsolation() throws Exception {
         assertThat(statusOf(getAs(login("player"), "/api/analytics/overview?" + range()))).isEqualTo(403);
