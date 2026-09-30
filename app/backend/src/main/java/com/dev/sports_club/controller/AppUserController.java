@@ -38,6 +38,12 @@ public class AppUserController {
         return service.update(id, request);
     }
 
+    /** For someone who lost their phone: switches their two-step sign-in off so they can enrol again. */
+    @PostMapping("/{id}/mfa/reset")
+    public AppUserResponse resetMfa(@PathVariable Integer id) {
+        return service.resetMfa(id);
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Integer id) {

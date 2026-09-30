@@ -16,6 +16,10 @@ public class AppUserResponse {
     private String username;
     private AppUserRole role;
     private Integer coachId;
+    private Integer athleteId;
+    private Integer organizationId;
     private Boolean isActive;
     private LocalDateTime lastLogin;
+    private String email;
+    private Boolean mfaEnabled;
 }

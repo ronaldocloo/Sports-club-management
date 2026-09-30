@@ -1,5 +1,6 @@
 package com.dev.sports_club.controller;
 
+import com.dev.sports_club.service.AccessScope;
 import com.dev.sports_club.dto.TeamRosterRequest;
 import com.dev.sports_club.dto.TeamRosterResponse;
 import com.dev.sports_club.service.TeamRosterService;
@@ -16,14 +17,17 @@ import java.util.List;
 public class TeamRosterController {
 
     private final TeamRosterService service;
+    private final AccessScope scope;
 
     @GetMapping
     public List<TeamRosterResponse> findAll() {
-        return service.findAll();
+        var visible = scope.current();
+        return service.findAll().stream().filter(r -> visible.athlete(r.getAthleteId())).toList();
     }
 
     @GetMapping("/{teamId}/{athleteId}")
     public TeamRosterResponse findById(@PathVariable Integer teamId, @PathVariable Integer athleteId) {
+        scope.current().requireAthlete(athleteId);
         return service.findById(teamId, athleteId);
     }
 

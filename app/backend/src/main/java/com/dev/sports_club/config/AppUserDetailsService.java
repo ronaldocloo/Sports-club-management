@@ -1,7 +1,9 @@
 package com.dev.sports_club.config;
 
 import com.dev.sports_club.entity.AppUser;
+import com.dev.sports_club.entity.OrganizationStatus;
 import com.dev.sports_club.repository.AppUserRepository;
+import com.dev.sports_club.repository.OrganizationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 public class AppUserDetailsService implements UserDetailsService {
 
     private final AppUserRepository repository;
+    private final OrganizationRepository organizationRepository;
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
@@ -26,6 +29,20 @@ public class AppUserDetailsService implements UserDetailsService {
                 .password(user.getPasswordHash())
                 .authorities(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
                 .disabled(!Boolean.TRUE.equals(user.getIsActive()))
+                .accountLocked(organizationSuspended(user) || isLocked(user))
                 .build();
+    }
+
+    private boolean organizationSuspended(AppUser user) {
+        if (user.getOrganizationId() == null) {
+            return false;
+        }
+        return organizationRepository.findById(user.getOrganizationId())
+                .map(o -> o.getStatus() == OrganizationStatus.Suspended)
+                .orElse(true);
+    }
+
+    private boolean isLocked(AppUser user) {
+        return user.getLockedUntil() != null && user.getLockedUntil().isAfter(java.time.LocalDateTime.now());
     }
 }

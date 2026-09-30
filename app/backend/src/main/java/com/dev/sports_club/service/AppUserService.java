@@ -1,6 +1,15 @@
 package com.dev.sports_club.service;
 
 import com.dev.sports_club.dto.AppUserRequest;
+import com.dev.sports_club.security.PasswordPolicy;
+import com.dev.sports_club.dto.ChangePasswordRequest;
+import com.dev.sports_club.entity.AppUserRole;
+import com.dev.sports_club.exception.BusinessRuleViolationException;
+import com.dev.sports_club.repository.AthleteRepository;
+import com.dev.sports_club.tenant.TenantContext;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import com.dev.sports_club.dto.AppUserResponse;
 import com.dev.sports_club.entity.AppUser;
 import com.dev.sports_club.exception.InvalidReferenceException;
@@ -12,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -19,52 +29,215 @@ public class AppUserService {
 
     private final AppUserRepository repository;
     private final CoachRepository coachRepository;
+    private final AthleteRepository athleteRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SessionRevoker sessions;
+    private final MfaService mfa;
 
+    /** Users of the caller's organization. A Super Admin with no organization selected sees everyone. */
     public List<AppUserResponse> findAll() {
         return repository.findAll().stream()
+                .filter(this::inCallerOrganization)
                 .map(this::toResponse)
                 .toList();
     }
 
     public AppUserResponse findById(Integer id) {
+        return toResponse(load(id));
+    }
+
+    private AppUser load(Integer id) {
         AppUser entity = repository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("AppUser not found: " + id));
-        return toResponse(entity);
+        if (!inCallerOrganization(entity)) {
+            throw new EntityNotFoundException("AppUser not found: " + id);
+        }
+        return entity;
+    }
+
+    // AppUser is not tenant-filtered (usernames are global so login works), so scope it by hand.
+    private boolean inCallerOrganization(AppUser user) {
+        if (!TenantContext.hasOrganization()) {
+            return actorIsSuperAdmin();
+        }
+        return Objects.equals(user.getOrganizationId(), TenantContext.get());
+    }
+
+    private boolean actorIsSuperAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_SuperAdmin"));
     }
 
     public AppUserResponse create(AppUserRequest request) {
-        validateCoachReference(request);
+        validateReferences(request);
+        if (request.getPassword() == null || request.getPassword().isBlank()) {
+            throw new BusinessRuleViolationException("A password of at least 8 characters is required for a new user");
+        }
+        PasswordPolicy.validate(request.getPassword(), request.getUsername());
+        if (repository.findByUsername(request.getUsername()).isPresent()) {
+            throw new BusinessRuleViolationException("Username is already taken: " + request.getUsername());
+        }
+        if (request.getRole() == AppUserRole.SuperAdmin && !actorIsSuperAdmin()) {
+            throw new BusinessRuleViolationException("Only a Super Admin can create a Super Admin");
+        }
+        if (request.getRole() != AppUserRole.SuperAdmin && !TenantContext.hasOrganization()) {
+            throw new BusinessRuleViolationException("Select an organization before creating users");
+        }
         AppUser entity = new AppUser();
+        entity.setOrganizationId(request.getRole() == AppUserRole.SuperAdmin ? null : TenantContext.get());
         entity.setUsername(request.getUsername());
         entity.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         entity.setRole(request.getRole());
         entity.setCoachId(request.getCoachId());
+        entity.setAthleteId(request.getAthleteId());
         entity.setIsActive(request.getIsActive() != null ? request.getIsActive() : Boolean.TRUE);
+        applyEmail(entity, request.getEmail());
         return toResponse(repository.save(entity));
     }
 
     public AppUserResponse update(Integer id, AppUserRequest request) {
-        validateCoachReference(request);
-        AppUser entity = repository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("AppUser not found: " + id));
+        validateReferences(request);
+        AppUser entity = load(id);
+        if ((request.getRole() == AppUserRole.SuperAdmin || entity.getRole() == AppUserRole.SuperAdmin) && !actorIsSuperAdmin()) {
+            throw new BusinessRuleViolationException("Only a Super Admin can manage Super Admin accounts");
+        }
+
+        boolean losesAdmin = entity.getRole() == AppUserRole.Admin
+                && Boolean.TRUE.equals(entity.getIsActive())
+                && (request.getRole() != AppUserRole.Admin || Boolean.FALSE.equals(request.getIsActive()));
+        if (losesAdmin && repository.countByRoleAndIsActiveAndOrganizationId(AppUserRole.Admin, true, entity.getOrganizationId()) <= 1) {
+            throw new BusinessRuleViolationException("At least one active Admin account must remain");
+        }
+        if (Boolean.FALSE.equals(request.getIsActive()) && isCurrentUser(entity)) {
+            throw new BusinessRuleViolationException("You cannot deactivate your own account");
+        }
+        if (request.getRole() != entity.getRole() && isCurrentUser(entity)) {
+            throw new BusinessRuleViolationException("You cannot change your own role");
+        }
+
         entity.setUsername(request.getUsername());
-        entity.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            PasswordPolicy.validate(request.getPassword(), entity.getUsername());
+            entity.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+            entity.setFailedAttempts(0);
+            entity.setLockedUntil(null);
+            sessions.revokeAll(entity.getUsername());   // an administrator changing a password signs the person out everywhere
+        }
+        if (Boolean.TRUE.equals(request.getIsActive())) {
+            entity.setFailedAttempts(0);
+            entity.setLockedUntil(null);
+        }
         entity.setRole(request.getRole());
         entity.setCoachId(request.getCoachId());
+        entity.setAthleteId(request.getAthleteId());
         if (request.getIsActive() != null) {
             entity.setIsActive(request.getIsActive());
         }
+        applyEmail(entity, request.getEmail());
         return toResponse(repository.save(entity));
     }
 
+    /** null leaves the address alone, an empty string removes it, anything else must be unused by any other account. */
+    private void applyEmail(AppUser entity, String email) {
+        if (email == null) return;
+        String normalized = email.trim().toLowerCase();
+        if (normalized.isEmpty()) { entity.setEmail(null); return; }
+        boolean takenByOther = repository.findByEmailIgnoreCase(normalized).stream().anyMatch(u -> !Objects.equals(u.getUserId(), entity.getUserId()));
+        if (takenByOther) throw new BusinessRuleViolationException("That email address is already used by another account");
+        entity.setEmail(normalized);
+    }
+
+    /** A signed-in user sets or clears their own address (used to send password-reset links). */
+    public AppUserResponse setOwnEmail(String username, String email) {
+        AppUser entity = repository.findByUsername(username).orElseThrow(() -> new EntityNotFoundException("AppUser not found: " + username));
+        applyEmail(entity, email == null ? "" : email);
+        return toResponse(repository.save(entity));
+    }
+
+    /** Admin: someone lost their phone. Turns two-step sign-in off so they can sign in and enrol again. */
+    public AppUserResponse resetMfa(Integer id) {
+        AppUser entity = load(id);
+        if (entity.getRole() == AppUserRole.SuperAdmin && !actorIsSuperAdmin()) {
+            throw new BusinessRuleViolationException("Only a Super Admin can manage Super Admin accounts");
+        }
+        mfa.resetByAdmin(entity);
+        return toResponse(repository.save(entity));
+    }
+
+    public static final int MAX_FAILED_ATTEMPTS = 5;
+    public static final int LOCK_MINUTES = 15;
+
+    /** Counts a wrong password; after {@value #MAX_FAILED_ATTEMPTS} in a row the account is locked for {@value #LOCK_MINUTES} minutes. */
+    public void recordFailedLogin(String username) {
+        repository.findByUsername(username).ifPresent(u -> {
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            if (u.getLockedUntil() != null && u.getLockedUntil().isAfter(now)) {
+                return; // already locked: further attempts do not extend the lock
+            }
+            if (u.getLockedUntil() != null) {
+                u.setFailedAttempts(0);
+                u.setLockedUntil(null);
+            }
+            u.setFailedAttempts((u.getFailedAttempts() == null ? 0 : u.getFailedAttempts()) + 1);
+            if (u.getFailedAttempts() >= MAX_FAILED_ATTEMPTS) {
+                u.setLockedUntil(now.plusMinutes(LOCK_MINUTES));
+            }
+            repository.save(u);
+        });
+    }
+
+    public void recordSuccessfulLogin(String username) {
+        repository.findByUsername(username).ifPresent(u -> {
+            u.setFailedAttempts(0);
+            u.setLockedUntil(null);
+            repository.save(u);
+        });
+    }
+
+    /** Lets a signed-in user change their own password after proving they know the current one. */
+    public void changePassword(String username, ChangePasswordRequest request) {
+        AppUser entity = repository.findByUsername(username)
+                .orElseThrow(() -> new EntityNotFoundException("AppUser not found: " + username));
+        if (!passwordEncoder.matches(request.getCurrentPassword(), entity.getPasswordHash())) {
+            throw new BusinessRuleViolationException("Current password is incorrect");
+        }
+        if (passwordEncoder.matches(request.getNewPassword(), entity.getPasswordHash())) {
+            throw new BusinessRuleViolationException("New password must be different from the current password");
+        }
+        PasswordPolicy.validate(request.getNewPassword(), entity.getUsername());
+        entity.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        repository.save(entity);
+    }
+
     public void delete(Integer id) {
+        AppUser entity = load(id);
+        if (isCurrentUser(entity)) {
+            throw new BusinessRuleViolationException("You cannot delete your own account");
+        }
+        if (entity.getRole() == AppUserRole.Admin && Boolean.TRUE.equals(entity.getIsActive())
+                && repository.countByRoleAndIsActiveAndOrganizationId(AppUserRole.Admin, true, entity.getOrganizationId()) <= 1) {
+            throw new BusinessRuleViolationException("At least one active Admin account must remain");
+        }
         repository.deleteById(id);
     }
 
-    private void validateCoachReference(AppUserRequest request) {
+    private boolean isCurrentUser(AppUser entity) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && entity.getUsername().equals(auth.getName());
+    }
+
+    private void validateReferences(AppUserRequest request) {
         if (request.getCoachId() != null && !coachRepository.existsById(request.getCoachId())) {
             throw new InvalidReferenceException("coachId " + request.getCoachId() + " does not exist");
+        }
+        if (request.getAthleteId() != null && !athleteRepository.existsById(request.getAthleteId())) {
+            throw new InvalidReferenceException("athleteId " + request.getAthleteId() + " does not exist");
+        }
+        if (request.getRole() == AppUserRole.Athlete && request.getAthleteId() == null) {
+            throw new BusinessRuleViolationException("An Athlete account must be linked to an athlete");
+        }
+        if (request.getRole() == AppUserRole.Coach && request.getCoachId() == null) {
+            throw new BusinessRuleViolationException("A Coach account must be linked to a coach");
         }
     }
 
@@ -74,8 +247,12 @@ public class AppUserService {
                 entity.getUsername(),
                 entity.getRole(),
                 entity.getCoachId(),
+                entity.getAthleteId(),
+                entity.getOrganizationId(),
                 entity.getIsActive(),
-                entity.getLastLogin()
+                entity.getLastLogin(),
+                entity.getEmail(),
+                Boolean.TRUE.equals(entity.getMfaEnabled())
         );
     }
 }

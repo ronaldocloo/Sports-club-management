@@ -13,7 +13,7 @@ public class AppUserRequest {
     @Size(max = 50)
     private String username;
 
-    @NotBlank
+    // Required when creating a user; optional on update (omit to keep the current password).
     @Size(min = 8, max = 100)
     private String password;
 
@@ -22,5 +22,12 @@ public class AppUserRequest {
 
     private Integer coachId;
 
+    private Integer athleteId;
+
     private Boolean isActive;
+
+    // Optional. Omit to leave unchanged; send an empty string to remove it.
+    @jakarta.validation.constraints.Email
+    @Size(max = 100)
+    private String email;
 }

@@ -10,6 +10,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface MembershipRepository extends JpaRepository<Membership, Integer> {
 
+    java.util.List<Membership> findByAthleteId(Integer athleteId);
+
     boolean existsByAthleteIdAndStatus(Integer athleteId, MembershipStatus status);
 
     boolean existsByAthleteIdAndStatusAndMembershipIdNot(Integer athleteId, MembershipStatus status, Integer membershipId);
